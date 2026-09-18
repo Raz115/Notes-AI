@@ -57,14 +57,21 @@ export function isStrokeIntersected(
 
   const { points } = stroke;
   if (points.length === 0) return false;
+  const firstPt = points[0];
+  if (!firstPt) return false;
+
   if (points.length === 1) {
-    return Math.hypot(eraserPoint.x - points[0].x, eraserPoint.y - points[0].y) <= effectiveRadius;
+    return Math.hypot(eraserPoint.x - firstPt.x, eraserPoint.y - firstPt.y) <= effectiveRadius;
   }
 
   for (let i = 0; i < points.length - 1; i++) {
-    const dist = distanceToSegment(eraserPoint, points[i], points[i + 1]);
-    if (dist <= effectiveRadius) {
-      return true;
+    const ptA = points[i];
+    const ptB = points[i + 1];
+    if (ptA && ptB) {
+      const dist = distanceToSegment(eraserPoint, ptA, ptB);
+      if (dist <= effectiveRadius) {
+        return true;
+      }
     }
   }
 

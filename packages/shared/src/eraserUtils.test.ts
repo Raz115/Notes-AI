@@ -82,8 +82,8 @@ describe("eraserUtils", () => {
       // Erase at x=50 with radius 10 (covers pt x=50)
       const remaining = eraseStrokeObject(stroke, { x: 50, y: 0 }, 10);
       expect(remaining.length).toBe(2);
-      expect(remaining[0].points.map((p) => p.x)).toEqual([0, 25]);
-      expect(remaining[1].points.map((p) => p.x)).toEqual([75, 100]);
+      expect(remaining[0]?.points.map((p) => p.x)).toEqual([0, 25]);
+      expect(remaining[1]?.points.map((p) => p.x)).toEqual([75, 100]);
     });
 
     it("returns original stroke if eraser does not intersect", () => {

@@ -1,16 +1,14 @@
-import type { ActiveToolType, ViewportState } from "@ai-notes/shared";
+import type { ActiveToolType, Point } from "@ai-notes/shared";
 
 export interface EraserCursorProps {
   activeTool: ActiveToolType;
   thickness: number;
-  viewport: ViewportState;
-  cursorPos: { x: number; y: number } | null;
+  cursorPos: Point | null;
 }
 
 export function EraserCursor({
   activeTool,
   thickness,
-  viewport,
   cursorPos,
 }: EraserCursorProps) {
   if (
@@ -20,18 +18,17 @@ export function EraserCursor({
     return null;
   }
 
-  // Display radius on screen is page-space radius * viewport zoom
-  const displayRadius = Math.max(4, (thickness / 2) * viewport.zoom);
-  const displayDiameter = displayRadius * 2;
-
+  // Eraser ring positioning in page-space units.
+  // The outer .paper-sheet-container handles CSS scale and pan transforms automatically,
+  // guaranteeing 100% calibration between the visual cursor ring and the erased stroke points.
   return (
     <div
       className="eraser-cursor-ring"
       style={{
         left: `${cursorPos.x}px`,
         top: `${cursorPos.y}px`,
-        width: `${displayDiameter}px`,
-        height: `${displayDiameter}px`,
+        width: `${thickness}px`,
+        height: `${thickness}px`,
       }}
       aria-hidden="true"
     />

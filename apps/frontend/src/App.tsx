@@ -14,14 +14,13 @@ import {
 } from "@ai-notes/shared";
 import { CanvasViewport } from "./canvas/CanvasViewport.js";
 import { Toolbar } from "./components/Toolbar.js";
-import { ToolPalette } from "./components/ToolPalette.js";
 import { ZoomWidget } from "./components/ZoomWidget.js";
 import { useHistory } from "./hooks/useHistory.js";
 
 type BackendStatus = "checking" | "online" | "offline";
 
 const DEFAULT_TOOL_SETTINGS: ToolSettingsMap = {
-  pen: { color: "#1e293b", thickness: 4, opacity: 1.0 },
+  pen: { color: "#000000", thickness: 4, opacity: 1.0 },
   pencil: { color: "#475569", thickness: 3, opacity: 0.65 },
   highlighter: { color: "#fef08a", thickness: 24, opacity: 0.5 },
   "eraser-partial": { color: "#ffffff", thickness: 20, opacity: 1.0 },
@@ -64,6 +63,9 @@ export function App() {
   // History stack for strokes
   const { strokes, setStrokes, undo, redo, canUndo, canRedo } = useHistory([]);
 
+  // Ref tracking initial stroke state before an erase gesture begins
+  const eraseInitialStrokesRef = useRef<StrokeObject[] | null>(null);
+
   // Active Tool & Settings
   const [activeTool, setActiveTool] = useState<ActiveToolType>("pen");
   const [toolSettings, setToolSettings] = useState<ToolSettingsMap>(
@@ -96,13 +98,18 @@ export function App() {
 
   const handleStrokeComplete = useCallback(
     (newStroke: StrokeObject) => {
-      setStrokes((prev) => [...prev, newStroke]);
+      setStrokes((prev) => [...prev, newStroke], true);
     },
     [setStrokes]
   );
 
+  const handleEraseStart = useCallback(() => {
+    eraseInitialStrokesRef.current = strokes;
+  }, [strokes]);
+
   const handleEraseAtPoint = useCallback(
     (eraserPoint: Point, radius: number, isStrokeEraser: boolean) => {
+      // Live erase update (without recording individual micro-steps to undo history)
       setStrokes((prevStrokes) => {
         if (isStrokeEraser) {
           return prevStrokes.filter(
@@ -110,29 +117,40 @@ export function App() {
           );
         }
 
-        // Partial eraser: trim / split affected strokes
         let hasChanges = false;
         const result: StrokeObject[] = [];
 
         for (const stroke of prevStrokes) {
           const remaining = eraseStrokeObject(stroke, eraserPoint, radius);
-          if (
-            remaining.length !== 1 ||
-            remaining[0] !== stroke
-          ) {
+          if (remaining.length !== 1 || remaining[0] !== stroke) {
             hasChanges = true;
           }
           result.push(...remaining);
         }
 
         return hasChanges ? result : prevStrokes;
-      });
+      }, false);
     },
     [setStrokes]
   );
 
+  const handleEraseEnd = useCallback(() => {
+    const initial = eraseInitialStrokesRef.current;
+    eraseInitialStrokesRef.current = null;
+
+    if (!initial) return;
+
+    // If strokes were erased during this drag gesture, commit ONE history state entry
+    if (strokes !== initial) {
+      setStrokes((currentStrokes) => {
+        // Re-push history entry so undoing reverts back to initial state
+        return currentStrokes;
+      }, true);
+    }
+  }, [strokes, setStrokes]);
+
   const handleClearPage = useCallback(() => {
-    setStrokes([]);
+    setStrokes([], true);
   }, [setStrokes]);
 
   const handleTemplateChange = useCallback((template: PageTemplate) => {
@@ -150,6 +168,10 @@ export function App() {
   return (
     <div className="app-container">
       <Toolbar
+        activeTool={activeTool}
+        onSelectTool={setActiveTool}
+        activeStyle={activeStyle}
+        onUpdateStyle={handleUpdateActiveSettings}
         template={page.template}
         onTemplateChange={handleTemplateChange}
         size={page.size}
@@ -166,18 +188,13 @@ export function App() {
       />
 
       <main className="canvas-main">
-        <ToolPalette
-          activeTool={activeTool}
-          onSelectTool={setActiveTool}
-          settings={activeStyle}
-          onUpdateSettings={handleUpdateActiveSettings}
-        />
-
         <CanvasViewport
           page={page}
           strokes={strokes}
           onStrokeComplete={handleStrokeComplete}
+          onEraseStart={handleEraseStart}
           onEraseAtPoint={handleEraseAtPoint}
+          onEraseEnd={handleEraseEnd}
           activeStyle={activeStyle}
           activeTool={activeTool}
           onViewportChange={setCurrentZoom}

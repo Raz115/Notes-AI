@@ -49,27 +49,28 @@ html, body, #root {
 }
 
 .app-toolbar {
-  height: 52px;
+  height: 56px;
   background-color: var(--color-bg-toolbar);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 1rem;
+  padding: 0 0.85rem;
   z-index: 50;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  gap: 0.5rem;
 }
 
 .toolbar-section {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.5rem;
 }
 
 .app-brand {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.4rem;
 }
 
 .brand-icon {
@@ -78,19 +79,19 @@ html, body, #root {
 
 .brand-title {
   font-weight: 700;
-  font-size: 1.05rem;
+  font-size: 1rem;
   background: linear-gradient(135deg, #38bdf8 0%, #a855f7 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
 .phase-pill {
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   font-weight: 600;
   text-transform: uppercase;
   background: rgba(56, 189, 248, 0.15);
   color: var(--color-primary);
-  padding: 0.15rem 0.45rem;
+  padding: 0.15rem 0.4rem;
   border-radius: 999px;
   border: 1px solid rgba(56, 189, 248, 0.3);
 }
@@ -99,17 +100,17 @@ html, body, #root {
 .status-badge {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0.2rem 0.5rem;
+  gap: 0.3rem;
+  padding: 0.15rem 0.45rem;
   border-radius: 999px;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   font-weight: 500;
   background: rgba(255, 255, 255, 0.05);
 }
 
 .status-dot {
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
 }
 
@@ -137,21 +138,26 @@ html, body, #root {
 
 .toolbar-divider {
   width: 1px;
-  height: 20px;
+  height: 22px;
   background-color: rgba(255, 255, 255, 0.12);
+}
+
+.toolbar-divider.mini {
+  height: 16px;
+  margin: 0 0.15rem;
 }
 
 /* History Controls (Undo / Redo) */
 .btn-history {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
-  padding: 0.3rem 0.6rem;
+  gap: 0.25rem;
+  padding: 0.35rem 0.55rem;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 6px;
   color: var(--color-text);
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -167,100 +173,23 @@ html, body, #root {
   cursor: not-allowed;
 }
 
-/* Select Dropdowns & Toggle Buttons */
-.select-dropdown {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: var(--color-text);
-  border-radius: 6px;
-  padding: 0.3rem 0.5rem;
-  font-size: 0.8rem;
-  outline: none;
-  cursor: pointer;
-}
-
-.select-dropdown:hover {
-  background: rgba(255, 255, 255, 0.12);
-}
-
-.btn-icon {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: var(--color-text);
-  border-radius: 6px;
-  padding: 0.3rem 0.6rem;
-  font-size: 0.8rem;
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-
-.btn-icon:hover {
-  background: rgba(255, 255, 255, 0.14);
-}
-
-.stroke-counter {
-  font-size: 0.75rem;
-  color: var(--color-text-muted);
-}
-
-.btn-danger {
-  background-color: #ef4444;
-  border: none;
-  border-radius: 6px;
-  padding: 0.3rem 0.7rem;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: #ffffff;
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-
-.btn-danger:hover:not(:disabled) {
-  background-color: #dc2626;
-}
-
-.btn-danger:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-/* -------------------------------------------------------------
-   Floating Tool Palette
-------------------------------------------------------------- */
-
-.tool-palette {
-  position: absolute;
-  top: 1rem;
-  left: 1rem;
-  z-index: 55;
+/* Tool Switcher Buttons */
+.tools-group {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.5rem 0.85rem;
-  background: rgba(15, 23, 42, 0.88);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 12px;
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
-}
-
-.tool-selector-group {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
+  gap: 0.3rem;
 }
 
 .tool-btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0.4rem 0.65rem;
+  gap: 0.3rem;
+  padding: 0.35rem 0.6rem;
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
+  border-radius: 7px;
   color: #cbd5e1;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -275,29 +204,18 @@ html, body, #root {
   background: rgba(56, 189, 248, 0.2);
   border-color: #38bdf8;
   color: #38bdf8;
-  box-shadow: 0 0 10px rgba(56, 189, 248, 0.25);
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.25);
 }
 
-.palette-divider {
-  width: 1px;
-  height: 28px;
-  background: rgba(255, 255, 255, 0.12);
-}
-
-/* Color Section */
-.color-section {
+/* Tool Settings (Color Picker & Thickness) */
+.tool-settings {
+  position: relative;
   display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
+  align-items: center;
+  gap: 0.4rem;
 }
 
-.section-label {
-  font-size: 0.7rem;
-  font-weight: 600;
-  color: var(--color-text-muted);
-}
-
-.color-swatch-grid {
+.color-picker {
   display: flex;
   align-items: center;
   gap: 0.3rem;
@@ -307,23 +225,20 @@ html, body, #root {
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  border: 2px solid transparent;
+  border: 1.5px solid rgba(255, 255, 255, 0.35);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
   cursor: pointer;
-  transition: transform 0.15s ease, border-color 0.15s ease;
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .color-swatch:hover {
-  transform: scale(1.15);
+  transform: scale(1.2);
+  border-color: rgba(255, 255, 255, 0.7);
 }
 
-.color-swatch.selected {
+.color-swatch.active {
   border-color: #ffffff;
-  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.8);
-}
-
-.color-swatch.mini {
-  width: 14px;
-  height: 14px;
+  box-shadow: 0 0 0 2.5px #38bdf8, 0 2px 6px rgba(0, 0, 0, 0.5);
 }
 
 .custom-color-picker {
@@ -348,47 +263,137 @@ html, body, #root {
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  border: 1px dashed rgba(255, 255, 255, 0.5);
+  border: 1.5px dashed rgba(255, 255, 255, 0.6);
   color: #ffffff;
   font-size: 0.7rem;
   font-weight: 700;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
 }
 
-.recent-colors-bar {
+.thickness-picker {
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  margin-top: 0.1rem;
 }
 
-.sub-label {
-  font-size: 0.65rem;
-  color: #64748b;
+.btn-toggle {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #cbd5e1;
+  border-radius: 6px;
+  padding: 0.25rem 0.45rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
 }
 
-/* Sliders */
-.sliders-section {
+.btn-toggle:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+.btn-toggle.active {
+  background: rgba(56, 189, 248, 0.2);
+  border-color: #38bdf8;
+  color: #38bdf8;
+}
+
+.options-toggle {
   display: flex;
   align-items: center;
-  gap: 0.85rem;
-}
-
-.slider-row {
-  display: flex;
-  flex-direction: column;
   gap: 0.2rem;
 }
 
-.slider-input-wrapper {
+.tool-options-popup {
+  position: absolute;
+  top: 42px;
+  left: 0;
+  z-index: 70;
   display: flex;
-  align-items: center;
-  gap: 0.4rem;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.75rem;
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+  min-width: 180px;
 }
 
-.size-preview-dot {
-  border-radius: 50%;
-  box-shadow: 0 0 4px rgba(0, 0, 0, 0.4);
-  transition: all 0.1s ease;
+.popup-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  color: #cbd5e1;
+}
+
+.popup-row input[type="range"] {
+  width: 100%;
+  accent-color: #38bdf8;
+}
+
+.eraser-label {
+  font-size: 0.75rem;
+  color: #cbd5e1;
+}
+
+/* Page Settings */
+.select-dropdown {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--color-text);
+  border-radius: 6px;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.78rem;
+  outline: none;
+  cursor: pointer;
+}
+
+.select-dropdown:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.btn-icon {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--color-text);
+  border-radius: 6px;
+  padding: 0.3rem 0.55rem;
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.btn-icon:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.stroke-counter {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.btn-danger {
+  background-color: #ef4444;
+  border: none;
+  border-radius: 6px;
+  padding: 0.3rem 0.65rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #ffffff;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background-color: #dc2626;
+}
+
+.btn-danger:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 /* -------------------------------------------------------------
@@ -427,7 +432,7 @@ html, body, #root {
   cursor: none;
 }
 
-/* Eraser Cursor Overlay Ring */
+/* Eraser Cursor Overlay Ring (Positioned in Page Coordinates inside .paper-overlay-layer) */
 .eraser-cursor-ring {
   position: absolute;
   transform: translate(-50%, -50%);

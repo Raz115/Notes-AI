@@ -15,7 +15,9 @@ export interface UseStrokeInputProps {
   style: StrokeStyle;
   activeTool: ActiveToolType;
   onStrokeComplete: (stroke: StrokeObject) => void;
+  onEraseStart?: () => void;
   onEraseAtPoint?: (eraserPoint: Point, radius: number, isStrokeEraser: boolean) => void;
+  onEraseEnd?: () => void;
   isPanningActive?: boolean;
 }
 
@@ -39,11 +41,13 @@ export function useStrokeInput({
   style,
   activeTool,
   onStrokeComplete,
+  onEraseStart,
   onEraseAtPoint,
+  onEraseEnd,
   isPanningActive = false,
 }: UseStrokeInputProps) {
   const [livePoints, setLivePoints] = useState<StrokePoint[]>([]);
-  const [cursorPos, setCursorPos] = useState<{ x: number; y: number } | null>(null);
+  const [cursorPos, setCursorPos] = useState<Point | null>(null);
   const isDrawingRef = useRef(false);
   const activePointerIdRef = useRef<number | null>(null);
   const strokePointsRef = useRef<StrokePoint[]>([]);
@@ -52,7 +56,6 @@ export function useStrokeInput({
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent<HTMLCanvasElement>) => {
-      // Primary button only (left click / stylus tip)
       if (e.button !== 0 || isPanningActive) return;
 
       const canvas = e.currentTarget;
@@ -62,10 +65,10 @@ export function useStrokeInput({
       activePointerIdRef.current = e.pointerId;
 
       const pagePoint = pointerToPage(e, viewport);
-      const rect = canvas.getBoundingClientRect();
-      setCursorPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+      setCursorPos(pagePoint);
 
       if (isEraser) {
+        onEraseStart?.();
         onEraseAtPoint?.(
           pagePoint,
           style.thickness / 2,
@@ -86,19 +89,17 @@ export function useStrokeInput({
       strokePointsRef.current = [firstPoint];
       setLivePoints([firstPoint]);
     },
-    [viewport, isPanningActive, isEraser, onEraseAtPoint, style.thickness, activeTool]
+    [viewport, isPanningActive, isEraser, onEraseStart, onEraseAtPoint, style.thickness, activeTool]
   );
 
   const handlePointerMove = useCallback(
     (e: React.PointerEvent<HTMLCanvasElement>) => {
-      const rect = e.currentTarget.getBoundingClientRect();
-      setCursorPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+      const pagePoint = pointerToPage(e, viewport);
+      setCursorPos(pagePoint);
 
       if (!isDrawingRef.current || e.pointerId !== activePointerIdRef.current) {
         return;
       }
-
-      const pagePoint = pointerToPage(e, viewport);
 
       if (isEraser) {
         onEraseAtPoint?.(
@@ -145,6 +146,7 @@ export function useStrokeInput({
       if (isEraser) {
         strokePointsRef.current = [];
         setLivePoints([]);
+        onEraseEnd?.();
         return;
       }
 
@@ -180,7 +182,7 @@ export function useStrokeInput({
 
       onStrokeComplete(newStroke);
     },
-    [pageId, style, activeTool, isEraser, onStrokeComplete]
+    [pageId, style, activeTool, isEraser, onStrokeComplete, onEraseEnd]
   );
 
   const handlePointerUp = useCallback(

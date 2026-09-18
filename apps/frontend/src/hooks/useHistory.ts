@@ -3,74 +3,107 @@ import type { StrokeObject } from "@ai-notes/shared";
 
 export interface UseHistoryReturn {
   strokes: StrokeObject[];
-  setStrokes: (strokes: StrokeObject[] | ((prev: StrokeObject[]) => StrokeObject[])) => void;
+  setStrokes: (
+    strokes: StrokeObject[] | ((prev: StrokeObject[]) => StrokeObject[]),
+    recordHistory?: boolean
+  ) => void;
   undo: () => void;
   redo: () => void;
   canUndo: boolean;
   canRedo: boolean;
 }
 
+interface HistoryState {
+  past: StrokeObject[][];
+  present: StrokeObject[];
+  future: StrokeObject[][];
+}
+
 export function useHistory(initialStrokes: StrokeObject[] = []): UseHistoryReturn {
-  const [past, setPast] = useState<StrokeObject[][]>([]);
-  const [present, setPresent] = useState<StrokeObject[]>(initialStrokes);
-  const [future, setFuture] = useState<StrokeObject[][]>([]);
+  const [history, setHistory] = useState<HistoryState>({
+    past: [],
+    present: initialStrokes,
+    future: [],
+  });
 
-  const setStrokes = useCallback((action: StrokeObject[] | ((prev: StrokeObject[]) => StrokeObject[])) => {
-    setPresent((prevPresent) => {
-      const nextPresent = typeof action === "function" ? action(prevPresent) : action;
-      if (nextPresent === prevPresent) return prevPresent;
+  const setStrokes = useCallback(
+    (
+      action: StrokeObject[] | ((prev: StrokeObject[]) => StrokeObject[]),
+      recordHistory = true
+    ) => {
+      setHistory((curr) => {
+        const nextPresent =
+          typeof action === "function" ? action(curr.present) : action;
+        if (nextPresent === curr.present) return curr;
 
-      setPast((prevPast) => [...prevPast, prevPresent]);
-      setFuture([]); // clear redo stack on new action
-      return nextPresent;
+        if (!recordHistory) {
+          return {
+            ...curr,
+            present: nextPresent,
+          };
+        }
+
+        return {
+          past: [...curr.past, curr.present],
+          present: nextPresent,
+          future: [],
+        };
+      });
+    },
+    []
+  );
+
+  const undo = useCallback(() => {
+    setHistory((curr) => {
+      if (curr.past.length === 0) return curr;
+      const previous = curr.past[curr.past.length - 1];
+      const newPast = curr.past.slice(0, curr.past.length - 1);
+      return {
+        past: newPast,
+        present: previous,
+        future: [curr.present, ...curr.future],
+      };
     });
   }, []);
 
-  const undo = useCallback(() => {
-    setPast((prevPast) => {
-      if (prevPast.length === 0) return prevPast;
-      const previous = prevPast[prevPast.length - 1];
-      const newPast = prevPast.slice(0, prevPast.length - 1);
-
-      setFuture((prevFuture) => [present, ...prevFuture]);
-      setPresent(previous);
-      return newPast;
-    });
-  }, [present]);
-
   const redo = useCallback(() => {
-    setFuture((prevFuture) => {
-      if (prevFuture.length === 0) return prevFuture;
-      const next = prevFuture[0];
-      const newFuture = prevFuture.slice(1);
-
-      setPast((prevPast) => [...prevPast, present]);
-      setPresent(next);
-      return newFuture;
+    setHistory((curr) => {
+      if (curr.future.length === 0) return curr;
+      const next = curr.future[0];
+      const newFuture = curr.future.slice(1);
+      return {
+        past: [...curr.past, curr.present],
+        present: next,
+        future: newFuture,
+      };
     });
-  }, [present]);
+  }, []);
 
   // Global Undo / Redo keyboard listener
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't intercept when user is typing inside an input/textarea
       const activeTag = document.activeElement?.tagName.toLowerCase();
-      if (activeTag === "input" || activeTag === "textarea" || (document.activeElement as HTMLElement)?.isContentEditable) {
+      if (
+        activeTag === "input" ||
+        activeTag === "textarea" ||
+        (document.activeElement as HTMLElement)?.isContentEditable
+      ) {
         return;
       }
 
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
+      const key = e.key.toLowerCase();
+      const isZ = key === "z" || e.code === "KeyZ";
+      const isY = key === "y" || e.code === "KeyY";
+
+      if ((e.ctrlKey || e.metaKey) && isZ) {
         if (e.shiftKey) {
-          // Ctrl+Shift+Z => Redo
           e.preventDefault();
           redo();
         } else {
-          // Ctrl+Z => Undo
           e.preventDefault();
           undo();
         }
-      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") {
-        // Ctrl+Y => Redo
+      } else if ((e.ctrlKey || e.metaKey) && isY) {
         e.preventDefault();
         redo();
       }
@@ -81,11 +114,11 @@ export function useHistory(initialStrokes: StrokeObject[] = []): UseHistoryRetur
   }, [undo, redo]);
 
   return {
-    strokes: present,
+    strokes: history.present,
     setStrokes,
     undo,
     redo,
-    canUndo: past.length > 0,
-    canRedo: future.length > 0,
+    canUndo: history.past.length > 0,
+    canRedo: history.future.length > 0,
   };
 }

@@ -20,7 +20,9 @@ export interface CanvasViewportProps {
   page: Page;
   strokes: StrokeObject[];
   onStrokeComplete: (stroke: StrokeObject) => void;
+  onEraseStart?: () => void;
   onEraseAtPoint?: (eraserPoint: Point, radius: number, isStrokeEraser: boolean) => void;
+  onEraseEnd?: () => void;
   activeStyle: StrokeStyle;
   activeTool: ActiveToolType;
   onViewportChange?: (zoom: number) => void;
@@ -36,7 +38,9 @@ export function CanvasViewport({
   page,
   strokes,
   onStrokeComplete,
+  onEraseStart,
   onEraseAtPoint,
+  onEraseEnd,
   activeStyle,
   activeTool,
   onViewportChange,
@@ -201,7 +205,9 @@ export function CanvasViewport({
     style: activeStyle,
     activeTool,
     onStrokeComplete,
+    onEraseStart,
     onEraseAtPoint,
+    onEraseEnd,
     isPanningActive: isSpacePressed || isPanning,
   });
 
@@ -316,7 +322,6 @@ export function CanvasViewport({
           <EraserCursor
             activeTool={activeTool}
             thickness={activeStyle.thickness}
-            viewport={viewport}
             cursorPos={cursorPos}
           />
         </div>

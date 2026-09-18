@@ -22,7 +22,8 @@ describe("CanvasViewport", () => {
         strokes={[]}
         onStrokeComplete={vi.fn()}
         activeStyle={{ color: "#000", thickness: 4, opacity: 1 }}
-      />,
+        activeTool="pen"
+      />
     );
 
     const canvas = screen.getByTestId("drawing-canvas");
@@ -41,7 +42,8 @@ describe("CanvasViewport", () => {
         strokes={[]}
         onStrokeComplete={onStrokeComplete}
         activeStyle={{ color: "#2563eb", thickness: 4, opacity: 1 }}
-      />,
+        activeTool="pen"
+      />
     );
 
     const canvas = screen.getByTestId("drawing-canvas");

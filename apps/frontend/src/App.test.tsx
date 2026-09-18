@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import App from "./App.js";
 
 describe("App (Phase 2 Writing Tools)", () => {
-  it("renders the canvas workspace, toolbar with history buttons, tool palette, and zoom widget", async () => {
+  it("renders the canvas workspace, toolbar with history buttons, tool controls, and zoom widget", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(() => Promise.resolve({ ok: true } as Response))
@@ -22,10 +22,10 @@ describe("App (Phase 2 Writing Tools)", () => {
     expect(screen.getByLabelText(/Paper Template/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/Page Size/i)).toBeInTheDocument();
 
-    // Tool Palette
-    expect(screen.getByTitle(/Pen/i)).toBeInTheDocument();
-    expect(screen.getByTitle(/Pencil/i)).toBeInTheDocument();
-    expect(screen.getByTitle(/Highlighter/i)).toBeInTheDocument();
+    // Tools in Toolbar by title
+    expect(screen.getByTitle(/Solid vector stroke/i)).toBeInTheDocument();
+    expect(screen.getByTitle(/Graphite texture/i)).toBeInTheDocument();
+    expect(screen.getByTitle(/Multiply blend/i)).toBeInTheDocument();
     expect(screen.getByTitle(/Eraser/i)).toBeInTheDocument();
 
     // Floating zoom widget
