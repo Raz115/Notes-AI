@@ -17,8 +17,9 @@ export function renderPaperTemplate(
   options: TemplateRenderOptions,
 ) {
   const { width, height } = options.dimensions;
-  const bg = options.backgroundColor ?? "#ffffff";
-  const lineColor = options.lineColor ?? "#e2e8f0";
+  const bg =
+    options.backgroundColor ?? (options.template === "notepad" ? "#fff7e7" : "#fffefb");
+  const lineColor = options.lineColor ?? "#e7e9ee";
   const marginColor = options.marginColor ?? "#fca5a5";
 
   ctx.save();

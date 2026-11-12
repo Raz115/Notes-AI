@@ -15,6 +15,7 @@ import {
 import { CanvasViewport } from "./canvas/CanvasViewport.js";
 import { Toolbar } from "./components/Toolbar.js";
 import { ZoomWidget } from "./components/ZoomWidget.js";
+import { Icon } from "./components/Icon.js";
 import { useHistory } from "./hooks/useHistory.js";
 
 type BackendStatus = "checking" | "online" | "offline";
@@ -61,16 +62,21 @@ export function App() {
   });
 
   // History stack for strokes
-  const { strokes, setStrokes, undo, redo, canUndo, canRedo } = useHistory([]);
-
-  // Ref tracking initial stroke state before an erase gesture begins
-  const eraseInitialStrokesRef = useRef<StrokeObject[] | null>(null);
+  const {
+    strokes,
+    setStrokes,
+    beginTransaction,
+    commitTransaction,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+  } = useHistory([]);
 
   // Active Tool & Settings
   const [activeTool, setActiveTool] = useState<ActiveToolType>("pen");
-  const [toolSettings, setToolSettings] = useState<ToolSettingsMap>(
-    DEFAULT_TOOL_SETTINGS
-  );
+  const [toolSettings, setToolSettings] =
+    useState<ToolSettingsMap>(DEFAULT_TOOL_SETTINGS);
 
   const activeStyle: ToolSettings = toolSettings[activeTool];
 
@@ -84,7 +90,7 @@ export function App() {
         },
       }));
     },
-    [activeTool]
+    [activeTool],
   );
 
   // Viewport zoom state for the zoom widget
@@ -100,28 +106,30 @@ export function App() {
     (newStroke: StrokeObject) => {
       setStrokes((prev) => [...prev, newStroke], true);
     },
-    [setStrokes]
+    [setStrokes],
   );
 
-  const handleEraseStart = useCallback(() => {
-    eraseInitialStrokesRef.current = strokes;
-  }, [strokes]);
-
   const handleEraseAtPoint = useCallback(
-    (eraserPoint: Point, radius: number, isStrokeEraser: boolean) => {
+    (
+      eraserPoint: Point,
+      radius: number,
+      isStrokeEraser: boolean,
+      eraserEnd: Point = eraserPoint,
+    ) => {
       // Live erase update (without recording individual micro-steps to undo history)
       setStrokes((prevStrokes) => {
         if (isStrokeEraser) {
-          return prevStrokes.filter(
-            (stroke) => !isStrokeIntersected(stroke, eraserPoint, radius)
+          const remaining = prevStrokes.filter(
+            (stroke) => !isStrokeIntersected(stroke, eraserPoint, radius, eraserEnd),
           );
+          return remaining.length === prevStrokes.length ? prevStrokes : remaining;
         }
 
         let hasChanges = false;
         const result: StrokeObject[] = [];
 
         for (const stroke of prevStrokes) {
-          const remaining = eraseStrokeObject(stroke, eraserPoint, radius);
+          const remaining = eraseStrokeObject(stroke, eraserPoint, radius, eraserEnd);
           if (remaining.length !== 1 || remaining[0] !== stroke) {
             hasChanges = true;
           }
@@ -131,23 +139,8 @@ export function App() {
         return hasChanges ? result : prevStrokes;
       }, false);
     },
-    [setStrokes]
+    [setStrokes],
   );
-
-  const handleEraseEnd = useCallback(() => {
-    const initial = eraseInitialStrokesRef.current;
-    eraseInitialStrokesRef.current = null;
-
-    if (!initial) return;
-
-    // If strokes were erased during this drag gesture, commit ONE history state entry
-    if (strokes !== initial) {
-      setStrokes((currentStrokes) => {
-        // Re-push history entry so undoing reverts back to initial state
-        return currentStrokes;
-      }, true);
-    }
-  }, [strokes, setStrokes]);
 
   const handleClearPage = useCallback(() => {
     setStrokes([], true);
@@ -192,16 +185,24 @@ export function App() {
           page={page}
           strokes={strokes}
           onStrokeComplete={handleStrokeComplete}
-          onEraseStart={handleEraseStart}
+          onEraseStart={beginTransaction}
           onEraseAtPoint={handleEraseAtPoint}
-          onEraseEnd={handleEraseEnd}
+          onEraseEnd={commitTransaction}
           activeStyle={activeStyle}
           activeTool={activeTool}
           onViewportChange={setCurrentZoom}
           viewportControlsRef={viewportControlsRef}
         />
 
-        {/* Floating zoom widget — bottom-right, visible on hover */}
+        <div className="workspace-footer">
+          <span className="page-indicator">
+            <Icon name="page" /> Page 1 <span className="page-total">/ 1</span>
+          </span>
+          <span className="workspace-hint">
+            <kbd>Space</kbd> to pan <span>&middot;</span> <kbd>Ctrl</kbd> + scroll to zoom
+          </span>
+        </div>
+
         <ZoomWidget
           zoom={currentZoom}
           onZoomIn={() => viewportControlsRef.current?.zoomIn()}

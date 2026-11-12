@@ -67,4 +67,37 @@ describe("useHistory", () => {
     expect(result.current.strokes.length).toBe(2);
     expect(result.current.canRedo).toBe(false);
   });
+
+  it("records a multi-update gesture once, even when updates are batched", () => {
+    const first = dummyStroke("1");
+    const second = dummyStroke("2");
+    const { result } = renderHook(() => useHistory([first, second]));
+
+    act(() => {
+      result.current.beginTransaction();
+      result.current.setStrokes([second], false);
+      result.current.setStrokes([], false);
+      result.current.commitTransaction();
+    });
+    expect(result.current.strokes).toEqual([]);
+    act(() => result.current.undo());
+    expect(result.current.strokes).toEqual([first, second]);
+    act(() => result.current.redo());
+    expect(result.current.strokes).toEqual([]);
+  });
+
+  it("does not discard redo for an erase gesture that makes no change", () => {
+    const first = dummyStroke("1");
+    const { result } = renderHook(() => useHistory([]));
+    act(() => result.current.setStrokes([first]));
+    act(() => result.current.undo());
+    act(() => {
+      result.current.beginTransaction();
+      result.current.setStrokes((strokes) => strokes, false);
+      result.current.commitTransaction();
+    });
+    expect(result.current.canRedo).toBe(true);
+    act(() => result.current.redo());
+    expect(result.current.strokes).toEqual([first]);
+  });
 });

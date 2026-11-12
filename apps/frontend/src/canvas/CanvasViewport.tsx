@@ -1,19 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import {
   PAGE_DIMENSIONS,
+  clamp,
+  MIN_ZOOM,
   type ActiveToolType,
   type Page,
-  type Point,
   type StrokeObject,
   type StrokeStyle,
 } from "@ai-notes/shared";
 import { useViewport } from "./useViewport.js";
-import { useStrokeInput } from "./useStrokeInput.js";
+import { useStrokeInput, type UseStrokeInputProps } from "./useStrokeInput.js";
 import { renderPaperTemplate } from "./renderers/paperTemplateRenderer.js";
-import {
-  renderLiveStroke,
-  renderStrokeObject,
-} from "./renderers/strokeRenderer.js";
+import { renderLiveStroke, renderStrokeObject } from "./renderers/strokeRenderer.js";
 import { EraserCursor } from "./EraserCursor.js";
 
 export interface CanvasViewportProps {
@@ -21,7 +19,7 @@ export interface CanvasViewportProps {
   strokes: StrokeObject[];
   onStrokeComplete: (stroke: StrokeObject) => void;
   onEraseStart?: () => void;
-  onEraseAtPoint?: (eraserPoint: Point, radius: number, isStrokeEraser: boolean) => void;
+  onEraseAtPoint?: UseStrokeInputProps["onEraseAtPoint"];
   onEraseEnd?: () => void;
   activeStyle: StrokeStyle;
   activeTool: ActiveToolType;
@@ -51,15 +49,8 @@ export function CanvasViewport({
 
   const pageDimensions = PAGE_DIMENSIONS[page.size][page.orientation];
 
-  const {
-    viewport,
-    panBy,
-    zoomTo,
-    zoomIn,
-    zoomOut,
-    resetZoom,
-    centerPage,
-  } = useViewport();
+  const { viewport, setViewport, panBy, zoomTo, zoomIn, zoomOut, resetZoom, centerPage } =
+    useViewport();
 
   // Expose viewport controls to parent toolbar
   useEffect(() => {
@@ -75,38 +66,39 @@ export function CanvasViewport({
               pageDimensions.width,
               pageDimensions.height,
               clientWidth,
-              clientHeight
+              clientHeight,
             );
           }
         },
       };
     }
-  }, [
-    viewportControlsRef,
-    zoomIn,
-    zoomOut,
-    resetZoom,
-    centerPage,
-    pageDimensions,
-  ]);
+  }, [viewportControlsRef, zoomIn, zoomOut, resetZoom, centerPage, pageDimensions]);
 
   // Report zoom changes
   useEffect(() => {
     onViewportChange?.(viewport.zoom);
   }, [viewport.zoom, onViewportChange]);
 
-  // Initial centering
+  // Open at a readable page width; the separate fit control shows the entire page.
   useEffect(() => {
-    if (containerRef.current) {
-      const { clientWidth, clientHeight } = containerRef.current;
-      centerPage(
-        pageDimensions.width,
-        pageDimensions.height,
-        clientWidth,
-        clientHeight
-      );
-    }
-  }, [page.size, page.orientation, centerPage, pageDimensions]);
+    const container = containerRef.current;
+    if (!container) return;
+    const fitWidth = () => {
+      const { clientWidth, clientHeight } = container;
+      if (clientWidth <= 0 || clientHeight <= 0) return;
+      const zoom = clamp((clientWidth - 72) / pageDimensions.width, MIN_ZOOM, 1);
+      setViewport({
+        x: (clientWidth - pageDimensions.width * zoom) / 2,
+        y: 36,
+        zoom,
+      });
+    };
+    fitWidth();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(fitWidth);
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [pageDimensions, setViewport]);
 
   // Panning state (Middle mouse or Space + Left click drag)
   const [isSpacePressed, setIsSpacePressed] = useState(false);
@@ -172,23 +164,23 @@ export function CanvasViewport({
     }
   };
 
-  // Wheel handling for zoom & pan
-  const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
-    e.preventDefault();
-
-    if (e.ctrlKey || e.metaKey) {
-      const containerRect = e.currentTarget.getBoundingClientRect();
-      const anchorScreenPoint = {
-        x: e.clientX - containerRect.left,
-        y: e.clientY - containerRect.top,
-      };
-
-      const zoomFactor = e.deltaY < 0 ? 1.08 : 0.92;
-      zoomTo(viewport.zoom * zoomFactor, anchorScreenPoint);
-    } else {
-      panBy(-e.deltaX, -e.deltaY);
-    }
-  };
+  // React's passive wheel listener cannot cancel browser scrolling/zooming.
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const handleWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      if (event.ctrlKey || event.metaKey) {
+        const rect = container.getBoundingClientRect();
+        const anchor = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+        zoomTo(viewport.zoom * (event.deltaY < 0 ? 1.08 : 0.92), anchor);
+      } else {
+        panBy(-event.deltaX, -event.deltaY);
+      }
+    };
+    container.addEventListener("wheel", handleWheel, { passive: false });
+    return () => container.removeEventListener("wheel", handleWheel);
+  }, [viewport.zoom, panBy, zoomTo]);
 
   // Stroke input handling on the paper surface
   const {
@@ -247,7 +239,8 @@ export function CanvasViewport({
 
     // 3. Draw in-progress live stroke
     if (livePoints.length > 0) {
-      let liveStrokeType: "pen-stroke" | "pencil-stroke" | "highlighter-stroke" = "pen-stroke";
+      let liveStrokeType: "pen-stroke" | "pencil-stroke" | "highlighter-stroke" =
+        "pen-stroke";
       if (activeTool === "pencil") liveStrokeType = "pencil-stroke";
       if (activeTool === "highlighter") liveStrokeType = "highlighter-stroke";
 
@@ -255,14 +248,7 @@ export function CanvasViewport({
     }
 
     ctx.restore();
-  }, [
-    page.template,
-    pageDimensions,
-    strokes,
-    livePoints,
-    activeStyle,
-    activeTool,
-  ]);
+  }, [page.template, pageDimensions, strokes, livePoints, activeStyle, activeTool]);
 
   const isEraser = activeTool === "eraser-partial" || activeTool === "eraser-stroke";
   const cursorClass = isPanning
@@ -277,7 +263,6 @@ export function CanvasViewport({
     <div
       ref={containerRef}
       className={`canvas-workspace ${cursorClass}`}
-      onWheel={handleWheel}
       onPointerDown={handleContainerPointerDown}
       onPointerMove={handleContainerPointerMove}
       onPointerUp={handleContainerPointerUp}
@@ -308,6 +293,7 @@ export function CanvasViewport({
           onPointerLeave={onCanvasPointerLeave}
           onPointerUp={onCanvasPointerUp}
           onPointerCancel={onCanvasPointerCancel}
+          onLostPointerCapture={onCanvasPointerCancel}
           data-testid="drawing-canvas"
         />
 

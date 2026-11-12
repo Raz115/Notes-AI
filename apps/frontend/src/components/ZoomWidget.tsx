@@ -8,7 +8,7 @@ export interface ZoomWidgetProps {
 
 /**
  * Floating zoom controls anchored to the bottom-right of the canvas workspace.
- * Fades in on hover and remains visible briefly after interaction.
+ * Always visible so keyboard and touch users can discover the controls.
  */
 export function ZoomWidget({
   zoom,
@@ -28,7 +28,7 @@ export function ZoomWidget({
         title="Zoom out"
         aria-label="Zoom out"
       >
-        −
+        <Icon name="minus" />
       </button>
       <button
         type="button"
@@ -45,16 +45,18 @@ export function ZoomWidget({
         title="Zoom in"
         aria-label="Zoom in"
       >
-        +
+        <Icon name="plus" />
       </button>
       <button
         type="button"
         className="zoom-widget-btn zoom-widget-fit"
         onClick={onFitPage}
         title="Fit page in window"
+        aria-label="Fit page"
       >
-        ⊡
+        <Icon name="fit" />
       </button>
     </div>
   );
 }
+import { Icon } from "./Icon.js";

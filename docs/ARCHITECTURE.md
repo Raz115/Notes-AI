@@ -92,6 +92,28 @@ Phase 1 will implement a **hybrid canvas architecture**:
   (`contentEditable`), lasso/selection bounding boxes and transformation
   handles, and embedded widgets like Desmos.
 
+## Current editor (Phase 2)
+
+The canvas foundation now includes pen, pencil, highlighter, and both eraser
+modes. Partial erasing clips canonical stroke segments against the circular
+eraser's swept capsule, including between pointer events. Cut edges interpolate
+pressure, and fragment bounds include stroke thickness. Whole-stroke erasing
+uses the same intersection geometry.
+
+`useHistory` keeps gesture transactions in the same state queue as live
+mutations. Beginning an erase records the pre-gesture snapshot; committing
+adds one undo entry only when the gesture changed the page. Undo/redo is
+disabled while that transaction is active, and no-op erasing preserves redo.
+Pointer cancellation or lost capture commits the already-applied gesture
+without adding a spurious endpoint.
+
+The editor uses light, system-font chrome and local SVG icons, with separate
+document and writing-tool rows. Ink, tool, paper, and notebook options share
+a dismissible settings panel with Escape/focus restoration. Zoom controls
+remain visible for keyboard and touch users. Clear-page requires confirmation.
+The UI explicitly labels this as a session-only workspace; it does not claim
+local/cloud saving, notebook navigation, or AI actions before those exist.
+
 ## Tooling decisions
 
 - **ESLint**: a single flat config (`eslint.config.js`) at the repo root
@@ -178,6 +200,20 @@ To maintain 60fps responsiveness with 1,000–5,000 strokes on a page:
 - Local mutations mark affected objects with a `dirty` flag.
 - Cloud synchronization debounces and batches delta updates to Supabase
   instead of transmitting whole page trees.
+
+## Final launch phase: production user handling
+
+Phase 13 is the public-launch gate for a planned 250-1,000 concurrently
+active users. Capacity is not inferred from account count or a local demo.
+The technical requirements define staging workload ramps, a soak test,
+latency/error targets, data-isolation/recovery checks, and a capacity/cost report.
+
+Build toward stateless API instances, durable bounded AI queues, provider-aware
+worker limits, pooled/indexed database access, and batched idempotent object
+sync. Keep writing/local autosave independent of cloud and AI congestion.
+Apply per-user quotas and explicit overload states, monitor without logging
+private note contents, and verify backup/restore and deployment rollback.
+Production capacity must be measured on the intended deployment before launch.
 
 ## What Phase 0 deliberately does not include
 

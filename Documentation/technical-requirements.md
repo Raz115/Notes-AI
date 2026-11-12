@@ -1690,6 +1690,71 @@ Implement:
 
 ---
 
+## Phase 13 — Production User Handling and Load Readiness
+
+Prepare the application for public launch with a target of **250-1,000
+concurrently active users**, not merely that many registered accounts.
+Use 250 users as the baseline, 500 as an intermediate ramp, and 1,000 as
+the peak target. This is a capacity requirement to verify, not a statement
+that the current implementation already supports this load.
+
+Implement and validate:
+
+- Reliable account/session handling under load: sign-in, token refresh,
+  expiration, logout, and strictly user-scoped notebook access.
+- Stateless, horizontally scalable API instances. Keep durable sync and AI
+  job state outside an individual API process.
+- Indexed, paginated user/notebook/page queries and appropriately pooled
+  database connections. Cache only where ownership and invalidation remain safe.
+- Debounced, batched object-delta sync with bounded retries, backoff/jitter,
+  and idempotent writes. Reconnection must not lose or duplicate notes.
+- Bounded AI/background queues, worker concurrency limits, per-user fairness,
+  and provider-aware rate limits. A slow AI provider must not block drawing,
+  local autosave, or ordinary notebook synchronization.
+- Per-user quotas and global request/concurrency limits, including AI usage,
+  uploads, and exports. Return explicit overload/rate-limit states, such as
+  HTTP 429 with retry guidance; do not silently drop work or retry indefinitely.
+- Production monitoring for latency, errors, database pressure, queue depth,
+  sync failures, and AI cost. Do not log note contents, credentials, or tokens.
+- Capacity/cost budgets, backup and restore verification, health/readiness
+  checks, and a documented deployment rollback procedure.
+
+### Load validation
+
+Use synthetic accounts and notes in staging, not live user data. Document
+the workload before running tests: active writing percentage, objects per
+page, autosave/sync frequency, notebook reads, login/refresh activity,
+reconnections, and AI requests per user per minute. Do not model every
+active user as continuously making an AI request.
+
+Run a mixed-workload ramp at 250, 500, and 1,000 concurrent users for at
+least 30 minutes at each level, followed by a two-hour soak at the 1,000-user
+target. Include an overload spike and recovery test. Isolate infrastructure
+tests from paid AI calls using controlled provider simulations, then verify
+real provider latency, quotas, and costs separately within an approved budget.
+
+Launch gates:
+
+- Non-AI interactive API reads/writes have p95 latency at or below 500 ms
+  under the defined workload. Measure AI, bulk import/export, and external
+  authentication latency separately rather than hiding them in this metric.
+- Unexpected server errors/timeouts remain below 1% of requests at each
+  target load. Report intentional throttling separately.
+- No acknowledged note changes are lost, duplicated, or exposed to another
+  user; offline reconnection and restore tests pass.
+- Writing remains responsive on a documented representative browser/device
+  and page workload, targeting 60 fps; cloud/AI pressure must not stall input.
+- Queue depth, memory use, database connections, and provider concurrency stay
+  within documented bounds. Queues recover after a spike without starving users.
+- The load-test report records deployment sizing, workload, p50/p95/p99 latency,
+  error rates, recovery behavior, and projected infrastructure/AI costs.
+
+**Exit criteria:** staging evidence demonstrates the 250-1,000-user target
+within the launch gates and budget, and operations/recovery procedures are
+ready before the application goes live.
+
+---
+
 # 68. Definition of Done
 
 A feature is complete only when:

@@ -317,6 +317,15 @@ The architecture should support growth in:
 * Number of pages.
 * Amount of stored handwriting data.
 
+Before public launch, the application should be validated for approximately
+250-1,000 concurrently active users. Notes must remain responsive and private,
+and saving/synchronization must remain reliable when AI services are slow or
+the system is busy. Per-user limits and clear overload states should protect
+availability and operating costs.
+
+This is a production-readiness target, not a claim about the current demo.
+Technical requirements Phase 13 defines the workload, load tests, and launch gates.
+
 ---
 
 ## Security
