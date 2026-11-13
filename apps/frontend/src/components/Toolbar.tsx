@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { PAGE_SIZE_OPTIONS } from "@ai-notes/shared";
 import type {
   ActiveToolType,
   PageOrientation,
@@ -10,6 +11,11 @@ import { Icon, type IconName } from "./Icon.js";
 
 export interface ToolbarProps {
   activeTool: ActiveToolType;
+  writingActive?: boolean;
+  objectTools?: ReactNode;
+  hasObjectSelection?: boolean;
+  notebookName?: string;
+  onHome?: () => void;
   onSelectTool: (tool: ActiveToolType) => void;
   activeStyle: ToolSettings;
   onUpdateStyle: (style: Partial<ToolSettings>) => void;
@@ -20,6 +26,7 @@ export interface ToolbarProps {
   orientation: PageOrientation;
   onOrientationChange: (o: PageOrientation) => void;
   strokeCount: number;
+  objectCount?: number;
   onClearPage: () => void;
   onUndo: () => void;
   onRedo: () => void;
@@ -79,6 +86,11 @@ const PANEL_TITLES: Record<PanelKind, string> = {
 
 export function Toolbar({
   activeTool,
+  writingActive = true,
+  objectTools,
+  hasObjectSelection = false,
+  notebookName = "Untitled notebook",
+  onHome,
   onSelectTool,
   activeStyle,
   onUpdateStyle,
@@ -89,6 +101,7 @@ export function Toolbar({
   orientation,
   onOrientationChange,
   strokeCount,
+  objectCount = strokeCount,
   onClearPage,
   onUndo,
   onRedo,
@@ -190,12 +203,14 @@ export function Toolbar({
     <header className="editor-header" data-testid="app-toolbar">
       <div className="document-bar">
         <div className="document-identity">
+          {onHome && <button type="button" className="icon-button" aria-label="Back to notebooks"
+            title="Back to notebooks" onClick={onHome}>‹</button>}
           <span className="notebook-mark">
             <Icon name="notebook" />
           </span>
           <div>
             <span className="app-name">Notes AI</span>
-            <h1>Untitled notebook</h1>
+            <h1>{notebookName}</h1>
           </div>
         </div>
         <div className="document-actions">
@@ -233,7 +248,7 @@ export function Toolbar({
       </div>
 
       <div className="tools-bar">
-        <div className="writing-toolbar" role="toolbar" aria-label="Writing tools">
+        <div className="writing-toolbar" role="toolbar" aria-label="Editing tools">
           <div className="history-controls">
             <button
               type="button"
@@ -262,10 +277,10 @@ export function Toolbar({
               <button
                 key={tool}
                 type="button"
-                className={`tool-btn ${activeTool === tool ? "active" : ""}`}
+                className={`tool-btn ${writingActive && activeTool === tool ? "active" : ""}`}
                 onClick={() => onSelectTool(tool)}
                 aria-label={name}
-                aria-pressed={activeTool === tool}
+                aria-pressed={writingActive && activeTool === tool}
                 title={`${name} (${description})`}
               >
                 <Icon name={icon} />
@@ -293,7 +308,7 @@ export function Toolbar({
             >
             <button
               type="button"
-              className={`tool-btn ${isEraser ? "active" : ""}`}
+              className={`tool-btn ${writingActive && isEraser ? "active" : ""}`}
               onClick={() => {
                 onSelectTool(
                   activeTool === "eraser-partial" ? "eraser-stroke" : "eraser-partial",
@@ -303,7 +318,7 @@ export function Toolbar({
               aria-label={
                 activeTool === "eraser-stroke" ? "Stroke eraser" : "Partial eraser"
               }
-              aria-pressed={isEraser}
+              aria-pressed={writingActive && isEraser}
               title={
                 activeTool === "eraser-stroke"
                   ? "Stroke eraser (click for partial)"
@@ -332,54 +347,59 @@ export function Toolbar({
             )}
             </div>
           </div>
-          <span className="toolbar-divider" />
-          {!isEraser && (
-            <div className="ink-controls">
-              <div className="quick-colors" aria-label="Quick colors">
-                {PRESET_COLORS.slice(0, 4).map(({ name, color }) => (
+          {objectTools}
+          {!hasObjectSelection && (
+            <>
+              <span className="toolbar-divider" />
+              {!isEraser && (
+                <div className="ink-controls">
+                  <div className="quick-colors" aria-label="Quick colors">
+                    {PRESET_COLORS.slice(0, 4).map(({ name, color }) => (
+                      <button
+                        key={color}
+                        type="button"
+                        className={`color-swatch ${activeStyle.color.toLowerCase() === color ? "active" : ""}`}
+                        style={{ backgroundColor: color }}
+                        onClick={() => selectColor(color)}
+                        aria-label={name}
+                        aria-pressed={activeStyle.color.toLowerCase() === color}
+                        title={name}
+                      />
+                    ))}
+                  </div>
                   <button
-                    key={color}
                     type="button"
-                    className={`color-swatch ${activeStyle.color.toLowerCase() === color ? "active" : ""}`}
-                    style={{ backgroundColor: color }}
-                    onClick={() => selectColor(color)}
-                    aria-label={name}
-                    aria-pressed={activeStyle.color.toLowerCase() === color}
-                    title={name}
-                  />
-                ))}
-              </div>
+                    className="color-menu-button"
+                    onClick={(event) => togglePanel("color", event)}
+                    aria-label="Ink color"
+                    aria-expanded={panel?.kind === "color"}
+                    aria-controls="editor-settings"
+                    title="Ink color"
+                  >
+                    <span
+                      className="ink-preview"
+                      style={{ backgroundColor: activeStyle.color }}
+                    />
+                    <Icon name="chevron" className="small-icon" />
+                  </button>
+                </div>
+              )}
               <button
                 type="button"
-                className="color-menu-button"
-                onClick={(event) => togglePanel("color", event)}
-                aria-label="Ink color"
-                aria-expanded={panel?.kind === "color"}
+                className="quiet-button tool-settings-trigger"
+                onClick={(event) => togglePanel("tool", event)}
+                aria-label="Tool settings"
+                aria-expanded={panel?.kind === "tool"}
                 aria-controls="editor-settings"
-                title="Ink color"
+                title="Thickness and opacity"
               >
-                <span
-                  className="ink-preview"
-                  style={{ backgroundColor: activeStyle.color }}
-                />
-                <Icon name="chevron" className="small-icon" />
+                <Icon name="settings" />
+                <span>
+                  {activeStyle.thickness} <span className="unit">px</span>
+                </span>
               </button>
-            </div>
+            </>
           )}
-          <button
-            type="button"
-            className="quiet-button tool-settings-trigger"
-            onClick={(event) => togglePanel("tool", event)}
-            aria-label="Tool settings"
-            aria-expanded={panel?.kind === "tool"}
-            aria-controls="editor-settings"
-            title="Thickness and opacity"
-          >
-            <Icon name="settings" />
-            <span>
-              {activeStyle.thickness} <span className="unit">px</span>
-            </span>
-          </button>
         </div>
       </div>
 
@@ -544,21 +564,15 @@ export function Toolbar({
               </fieldset>
               <fieldset className="settings-field">
                 <legend>Page size</legend>
-                <div className="segmented-control">
-                  <button
-                    type="button"
-                    aria-pressed={size === "a4"}
-                    onClick={() => onSizeChange("a4")}
-                  >
-                    A4
-                  </button>
-                  <button
-                    type="button"
-                    aria-pressed={size === "letter"}
-                    onClick={() => onSizeChange("letter")}
-                  >
-                    Letter
-                  </button>
+                <div className="paper-size-options">
+                  {PAGE_SIZE_OPTIONS.map((option) => (
+                    <button key={option.value} type="button"
+                      aria-label={option.label} aria-pressed={size === option.value}
+                      onClick={() => onSizeChange(option.value)}>
+                      <span>{option.label}</span>
+                      <small>{option.dimensions}</small>
+                    </button>
+                  ))}
                 </div>
               </fieldset>
               <fieldset className="settings-field">
@@ -622,7 +636,7 @@ export function Toolbar({
                 <button
                   type="button"
                   className="clear-page-button"
-                  disabled={strokeCount === 0}
+                  disabled={objectCount === 0}
                   onClick={() => setConfirmClear(true)}
                 >
                   <Icon name="trash" /> Clear page

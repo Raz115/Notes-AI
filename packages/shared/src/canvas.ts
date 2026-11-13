@@ -102,6 +102,7 @@ export interface ShapeStyle {
   strokeColor: string;
   fillColor?: string;
   strokeWidth: number;
+  opacity?: number;
 }
 
 export interface RectangleObject extends CanvasObjectBase {
@@ -170,7 +171,7 @@ export type CanvasObject =
   | GraphObject
   | AiGenerationGroupObject;
 
-export type PageSize = "letter" | "a4";
+export type PageSize = "letter" | "a4" | "legal" | "cue-card";
 export type PageOrientation = "portrait" | "landscape";
 export type PageTemplate = "plain" | "lined" | "graph" | "notepad";
 
@@ -228,6 +229,13 @@ export interface PageDimensions {
   height: number;
 }
 
+export const PAGE_SIZE_OPTIONS: { value: PageSize; label: string; dimensions: string }[] = [
+  { value: "a4", label: "A4", dimensions: "210 × 297 mm" },
+  { value: "letter", label: "Letter", dimensions: "8.5 × 11 in" },
+  { value: "legal", label: "Legal", dimensions: "8.5 × 14 in" },
+  { value: "cue-card", label: "Cue card", dimensions: "4 × 6 in" },
+];
+
 /** Standard page dimensions in 96 DPI CSS pixels. */
 export const PAGE_DIMENSIONS: Record<PageSize, Record<PageOrientation, PageDimensions>> = {
   a4: {
@@ -237,5 +245,13 @@ export const PAGE_DIMENSIONS: Record<PageSize, Record<PageOrientation, PageDimen
   letter: {
     portrait: { width: 816, height: 1056 },
     landscape: { width: 1056, height: 816 },
+  },
+  legal: {
+    portrait: { width: 816, height: 1344 },
+    landscape: { width: 1344, height: 816 },
+  },
+  "cue-card": {
+    portrait: { width: 384, height: 576 },
+    landscape: { width: 576, height: 384 },
   },
 };

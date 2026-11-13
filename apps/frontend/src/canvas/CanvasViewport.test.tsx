@@ -177,4 +177,111 @@ describe("CanvasViewport", () => {
     });
     expect(onEraseEnd).toHaveBeenCalledTimes(1);
   });
+
+  it("lays out consecutive pages and routes erasing to the touched page", () => {
+    const secondPage = { ...dummyPage, id: "page-2", order: 1 };
+    const onPageActivate = vi.fn();
+    const onPageEraseAtPoint = vi.fn();
+    const controls: NonNullable<CanvasViewportProps["viewportControlsRef"]> = { current: null };
+    render(
+      <CanvasViewport page={dummyPage} pages={[dummyPage, secondPage]} strokes={[]}
+        onStrokeComplete={vi.fn()} onPageActivate={onPageActivate}
+        onPageEraseAtPoint={onPageEraseAtPoint}
+        activeStyle={{ color: "#fff", thickness: 20, opacity: 1 }}
+        activeTool="eraser-partial" viewportControlsRef={controls} />,
+    );
+    const sheets = screen.getAllByTestId("paper-sheet");
+    expect(sheets[1]).toHaveStyle({ top: "1151px" });
+    fireEvent.pointerDown(screen.getAllByTestId("drawing-canvas")[1]!, {
+      button: 0, pointerId: 1, clientX: 100, clientY: 100,
+    });
+    expect(onPageActivate).toHaveBeenCalledWith("page-2");
+    expect(onPageEraseAtPoint).toHaveBeenCalledWith("page-2", { x: 100, y: 100 }, 10, false);
+    act(() => controls.current?.goToPage?.("page-2"));
+    expect(sheets[0]?.parentElement).toHaveStyle({ transform: "translate(0px, -1115px) scale(1)" });
+  });
+
+  it.each<{ size: Page["size"]; threshold: number }>([
+    { size: "a4", threshold: 635 },
+    { size: "cue-card", threshold: 240 },
+  ])("requires 240 pixels past the end before appending $size paper", ({ size, threshold }) => {
+    const width = vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(1000);
+    const height = vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(800);
+    const onAppendPage = vi.fn();
+    try {
+      render(<CanvasViewport page={{ ...dummyPage, size }} strokes={[]}
+        onStrokeComplete={vi.fn()} onAppendPage={onAppendPage}
+        activeStyle={{ color: "#000", thickness: 4, opacity: 1 }} activeTool="pen" />);
+      const workspace = screen.getByTestId("canvas-workspace");
+      expect(onAppendPage).not.toHaveBeenCalled();
+      // Multiple events must accumulate even when delivered in the same React batch.
+      act(() => {
+        fireEvent.wheel(workspace, { deltaY: threshold - 1 });
+        expect(onAppendPage).not.toHaveBeenCalled();
+        fireEvent.wheel(workspace, { deltaY: 1 });
+      });
+      expect(onAppendPage).toHaveBeenCalledTimes(1);
+      fireEvent.wheel(workspace, { deltaY: 5000 });
+      expect(onAppendPage).toHaveBeenCalledTimes(1);
+    } finally {
+      width.mockRestore();
+      height.mockRestore();
+    }
+  });
+
+  it("ignores downward inertia after appending and rearms for a new scroll gesture", () => {
+    const width = vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(1000);
+    const height = vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(800);
+    const clock = vi.spyOn(Date, "now").mockReturnValue(1000);
+    const onAppendPage = vi.fn();
+    const controls: NonNullable<CanvasViewportProps["viewportControlsRef"]> = { current: null };
+    const props: CanvasViewportProps = {
+      page: dummyPage, pages: [dummyPage], strokes: [],
+      onStrokeComplete: vi.fn(), onAppendPage, viewportControlsRef: controls,
+      activeStyle: { color: "#000", thickness: 4, opacity: 1 }, activeTool: "pen",
+    };
+    try {
+      const { rerender } = render(<CanvasViewport {...props} />);
+      const workspace = screen.getByTestId("canvas-workspace");
+      fireEvent.wheel(workspace, { deltaY: 635 });
+      expect(onAppendPage).toHaveBeenCalledTimes(1);
+      const second = { ...dummyPage, id: "new-page", order: 1 };
+      rerender(<CanvasViewport {...props} page={second} pages={[dummyPage, second]} />);
+      act(() => controls.current?.goToPage?.(second.id));
+      const document = screen.getAllByTestId("paper-sheet")[0]!.parentElement!;
+      const transform = document.style.transform;
+      fireEvent.wheel(workspace, { deltaY: 3000 });
+      expect(onAppendPage).toHaveBeenCalledTimes(1);
+      expect(document.style.transform).toBe(transform);
+      clock.mockReturnValue(1500);
+      fireEvent.wheel(workspace, { deltaY: 635 });
+      expect(onAppendPage).toHaveBeenCalledTimes(2);
+    } finally {
+      width.mockRestore();
+      height.mockRestore();
+      clock.mockRestore();
+    }
+  });
+
+  it("does not append on zoom, upward scrolling or horizontal panning and supports line/page wheel units", () => {
+    const width = vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(1000);
+    const height = vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(800);
+    const onAppendPage = vi.fn();
+    try {
+      render(<CanvasViewport page={dummyPage} strokes={[]} onStrokeComplete={vi.fn()}
+        onAppendPage={onAppendPage} activeStyle={{ color: "#000", thickness: 4, opacity: 1 }} activeTool="pen" />);
+      const workspace = screen.getByTestId("canvas-workspace");
+      fireEvent.wheel(workspace, { deltaY: 3000, ctrlKey: true });
+      fireEvent.wheel(workspace, { deltaX: 3000, deltaY: 1000 });
+      fireEvent.wheel(workspace, { deltaY: -500 });
+      expect(onAppendPage).not.toHaveBeenCalled();
+      fireEvent.wheel(workspace, { deltaY: 1, deltaMode: 1 });
+      expect(onAppendPage).not.toHaveBeenCalled();
+      fireEvent.wheel(workspace, { deltaY: 1, deltaMode: 2 });
+      expect(onAppendPage).toHaveBeenCalledTimes(1);
+    } finally {
+      width.mockRestore();
+      height.mockRestore();
+    }
+  });
 });

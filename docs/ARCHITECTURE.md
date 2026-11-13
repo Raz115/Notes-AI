@@ -112,7 +112,41 @@ document and writing-tool rows. Ink, tool, paper, and notebook options share
 a dismissible settings panel with Escape/focus restoration. Zoom controls
 remain visible for keyboard and touch users. Clear-page requires confirmation.
 The UI explicitly labels this as a session-only workspace; it does not claim
-local/cloud saving, notebook navigation, or AI actions before those exist.
+local/cloud saving or AI actions before those exist.
+
+## Object editing (Phase 3)
+
+The page history contains the shared `CanvasObject` union, so freehand strokes,
+text and shapes participate in the same undo/redo transactions. The canvas
+continues rendering strokes, while an overlay renders shapes and editable
+textboxes. Lasso hit testing uses page-relative canonical stroke/line geometry;
+selection transforms update points and recompute their bounding boxes.
+Copy/paste uses an in-session object clipboard. Shape cleanup is deterministic
+and explicitly requested; undo restores the original stroke.
+
+Select, text and shape tools share the main ribbon. The icon-based shape picker
+chooses hollow or solid fill for newly drawn closed shapes. Selected shapes can
+change stroke width and opacity together; fill applies only to closed shapes
+and follows their stroke color. Mixed selections show mixed values, and
+non-shape objects are not changed by shape-specific controls. Slider gestures
+are grouped in history, and line/arrow/polygon bounds are recomputed when
+stroke width changes. Filled shapes render consistently on pages and thumbnails.
+
+## Pages and notebooks (Phase 4)
+
+The dashboard manages notebooks and nested folders, with thumbnails and pinned
+notebooks. The editor displays pages in a continuous vertical layout and
+supports page creation, navigation, reordering, deletion, and paper settings.
+Downward wheel scrolling 240 screen pixels beyond the last page appends and
+activates a page with the last page's settings. Appending is limited to once
+per wheel gesture, with a 350 ms idle gap before another gesture; zooming,
+upward scrolling, and horizontal panning do not append pages.
+Shared paper sizes cover A4, Letter, Legal, and 4 x 6 inch cue cards.
+Object history is scoped by notebook; deleting a page or notebook removes its
+objects from current state and history.
+
+All notebook, folder, page and object state remains in memory until Phase 5.
+Reloading loses the session; local persistence and recovery are not yet available.
 
 ## Tooling decisions
 

@@ -73,9 +73,13 @@ describe("Toolbar", () => {
     fireEvent.click(screen.getByRole("button", { name: "Page settings" }));
     fireEvent.click(screen.getByRole("button", { name: "Notepad" }));
     fireEvent.click(screen.getByRole("button", { name: "Letter" }));
+    fireEvent.click(screen.getByRole("button", { name: "Legal" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cue card" }));
     fireEvent.click(screen.getByRole("button", { name: "Landscape" }));
     expect(onTemplateChange).toHaveBeenCalledWith("notepad");
     expect(onSizeChange).toHaveBeenCalledWith("letter");
+    expect(onSizeChange).toHaveBeenCalledWith("legal");
+    expect(onSizeChange).toHaveBeenCalledWith("cue-card");
     expect(onOrientationChange).toHaveBeenCalledWith("landscape");
     fireEvent.pointerDown(document.body);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();

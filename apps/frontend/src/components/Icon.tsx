@@ -7,6 +7,42 @@ const icons = {
       <path d="M8 3v18M12 8h4M12 12h4" />
     </>
   ),
+  folder: <path d="M3 7V5a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Zm0 1h18" />,
+  pin: (
+    <>
+      <path d="m9 3 6 0-1 6 4 4v2H6v-2l4-4-1-6Z" />
+      <path d="M12 15v6" />
+    </>
+  ),
+  lasso: (
+    <>
+      <path d="M17.8 13.2c2.6-2 2.8-4.9.4-6.9-2.7-2.3-7.5-2.3-10.7-.2-3.3 2.2-4 5.5-1.6 7.7 2.1 1.9 5.6 2.3 8.6 1.3" strokeDasharray="2.5 2" />
+      <path d="m13 13 3 6 1.1-2.5L20 16l-7-3Z" />
+    </>
+  ),
+  text: <path d="M4 5h16M12 5v14M9 19h6M4 5v3M20 5v3" />,
+  rectangle: <rect x="4" y="5" width="16" height="14" rx="1.5" />,
+  ellipse: <ellipse cx="12" cy="12" rx="8" ry="7" />,
+  line: <path d="m5 19 14-14" />,
+  arrow: <path d="M4 19 19 4M10 4h9v9" />,
+  triangle: <path d="M12 4 21 20H3L12 4Z" />,
+  copy: (
+    <>
+      <rect x="8" y="8" width="12" height="13" rx="2" />
+      <path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h3" />
+    </>
+  ),
+  paste: (
+    <>
+      <path d="M9 5H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3" />
+      <rect x="9" y="3" width="6" height="4" rx="1" />
+    </>
+  ),
+  clean: (
+    <>
+      <path d="m4 20 11-11 3 3L7 23l-3-3ZM12 3l.7 2.3L15 6l-2.3.7L12 9l-.7-2.3L9 6l2.3-.7L12 3ZM19 13l.5 1.5L21 15l-1.5.5L19 17l-.5-1.5L17 15l1.5-.5L19 13Z" />
+    </>
+  ),
   pen: (
     <>
       <path d="m13 3 8 8-7 7-7-7 6-8Z" />

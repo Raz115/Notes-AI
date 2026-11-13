@@ -278,6 +278,8 @@ Supported page sizes:
 
 - Letter
 - A4
+- Legal (8.5 x 14 inches)
+- Cue card (4 x 6 inches)
 
 Supported orientations:
 
@@ -287,6 +289,9 @@ Supported orientations:
 The notebook creation flow determines the default page configuration.
 
 Pages are displayed in a continuous vertical document view.
+Scrolling downward 240 screen pixels beyond the last page adds and activates
+a new page with the last page's paper settings. Only one page is added per
+scroll gesture, preventing scroll inertia from creating unwanted pages.
 
 ---
 
@@ -357,7 +362,7 @@ A new-notebook tile shall visually behave as a blank notebook and expose a plus 
 The notebook creation dialog shall collect:
 
 - Notebook name
-- Letter/A4
+- Letter/A4/Legal/Cue card
 - Portrait/landscape
 - Page template
 
@@ -494,6 +499,10 @@ Examples:
 - Star
 
 The implementation should use deterministic geometry rather than an LLM for ordinary shape creation.
+
+The main ribbon shall expose an icon-based shape picker. Closed shapes may be
+hollow or solid, using the stroke color for solid fill. Users may adjust the
+stroke width and opacity of selected shapes; lines and arrows do not have fill.
 
 ---
 

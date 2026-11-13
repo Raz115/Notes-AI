@@ -100,4 +100,44 @@ describe("useHistory", () => {
     act(() => result.current.redo());
     expect(result.current.strokes).toEqual([first]);
   });
+
+  it("leaves undo shortcuts to focused text inputs", () => {
+    const first = dummyStroke("1");
+    const { result } = renderHook(() => useHistory([]));
+    act(() => result.current.setStrokes([first]));
+    const input = document.createElement("input");
+    document.body.append(input);
+    try {
+      input.focus();
+      const event = new KeyboardEvent("keydown", { key: "z", ctrlKey: true, bubbles: true, cancelable: true });
+      act(() => { input.dispatchEvent(event); });
+      expect(event.defaultPrevented).toBe(false);
+      expect(result.current.strokes).toEqual([first]);
+    } finally {
+      input.remove();
+    }
+  });
+
+  it("keeps undo histories independent when switching notebooks", () => {
+    const first = dummyStroke("1");
+    const second = { ...dummyStroke("2"), pageId: "page-2" };
+    const { result, rerender } = renderHook(
+      ({ scope }) => useHistory<StrokeObject>([], scope, (stroke) => stroke.pageId === scope),
+      { initialProps: { scope: "page-1" } },
+    );
+    act(() => result.current.setStrokes([first]));
+    rerender({ scope: "page-2" });
+    expect(result.current.canUndo).toBe(false);
+    act(() => result.current.setStrokes((strokes) => [...strokes, second]));
+    act(() => result.current.undo());
+    expect(result.current.strokes).toEqual([first]);
+    rerender({ scope: "page-1" });
+    act(() => result.current.undo());
+    expect(result.current.strokes).toEqual([]);
+    act(() => result.current.redo());
+    expect(result.current.strokes).toEqual([first]);
+    rerender({ scope: "page-2" });
+    act(() => result.current.redo());
+    expect(result.current.strokes).toEqual([first, second]);
+  });
 });

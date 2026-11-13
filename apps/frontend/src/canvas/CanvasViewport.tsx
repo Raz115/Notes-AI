@@ -4,19 +4,38 @@ import {
   clamp,
   MIN_ZOOM,
   type ActiveToolType,
+  type CanvasObject,
   type Page,
   type StrokeObject,
   type StrokeStyle,
 } from "@ai-notes/shared";
 import { useViewport } from "./useViewport.js";
-import { useStrokeInput, type UseStrokeInputProps } from "./useStrokeInput.js";
-import { renderPaperTemplate } from "./renderers/paperTemplateRenderer.js";
-import { renderLiveStroke, renderStrokeObject } from "./renderers/strokeRenderer.js";
-import { EraserCursor } from "./EraserCursor.js";
+import type { UseStrokeInputProps } from "./useStrokeInput.js";
+import { PageSurface } from "./PageSurface.js";
+import type { ObjectTool, ShapeKind } from "../components/ObjectToolbar.js";
 
 export interface CanvasViewportProps {
   page: Page;
+  pages?: Page[];
+  onPageActivate?: (id: string) => void;
+  onAppendPage?: () => void;
+  onPageEraseAtPoint?: (
+    pageId: string,
+    ...args: Parameters<NonNullable<UseStrokeInputProps["onEraseAtPoint"]>>
+  ) => void;
   strokes: StrokeObject[];
+  objects?: CanvasObject[];
+  onObjectsChange?: (
+    update: CanvasObject[] | ((previous: CanvasObject[]) => CanvasObject[]),
+    recordHistory?: boolean,
+  ) => void;
+  objectTool?: ObjectTool | null;
+  shapeKind?: ShapeKind;
+  shapeFilled?: boolean;
+  selectedIds?: string[];
+  onSelectionChange?: (ids: string[]) => void;
+  onObjectGestureStart?: () => void;
+  onObjectGestureEnd?: () => void;
   onStrokeComplete: (stroke: StrokeObject) => void;
   onEraseStart?: () => void;
   onEraseAtPoint?: UseStrokeInputProps["onEraseAtPoint"];
@@ -29,12 +48,26 @@ export interface CanvasViewportProps {
     zoomOut: () => void;
     resetZoom: () => void;
     fitPage: () => void;
+    goToPage?: (pageId: string) => void;
   } | null>;
 }
 
 export function CanvasViewport({
   page,
+  pages,
+  onPageActivate,
+  onAppendPage,
+  onPageEraseAtPoint,
   strokes,
+  objects,
+  onObjectsChange,
+  objectTool,
+  shapeKind,
+  shapeFilled,
+  selectedIds,
+  onSelectionChange,
+  onObjectGestureStart,
+  onObjectGestureEnd,
   onStrokeComplete,
   onEraseStart,
   onEraseAtPoint,
@@ -45,12 +78,33 @@ export function CanvasViewport({
   viewportControlsRef,
 }: CanvasViewportProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const pageDimensions = PAGE_DIMENSIONS[page.size][page.orientation];
+  const documentPages = pages ?? [page];
+  const documentWidth = Math.max(...documentPages.map((item) => PAGE_DIMENSIONS[item.size][item.orientation].width));
+  let nextOffset = 0;
+  const layouts = documentPages.map((item) => {
+    const dimensions = PAGE_DIMENSIONS[item.size][item.orientation];
+    const layout = { page: item, x: (documentWidth - dimensions.width) / 2, y: nextOffset };
+    nextOffset += dimensions.height + 28;
+    return layout;
+  });
+  const activeLayout = layouts.find((layout) => layout.page.id === page.id);
+  const documentHeight = Math.max(0, nextOffset - 28);
+  const lastPageId = documentPages[documentPages.length - 1]?.id;
 
   const { viewport, setViewport, panBy, zoomTo, zoomIn, zoomOut, resetZoom, centerPage } =
     useViewport();
+  const viewportRef = useRef(viewport);
+  const appendGestureRef = useRef<{ lastWheelAt: number; requested: boolean; pageId: string | null }>({
+    lastWheelAt: 0, requested: false, pageId: null,
+  });
+  useEffect(() => {
+    viewportRef.current = viewport;
+  }, [viewport]);
+  useEffect(() => {
+    if (appendGestureRef.current.pageId !== lastPageId) appendGestureRef.current.pageId = null;
+  }, [lastPageId]);
 
   // Expose viewport controls to parent toolbar
   useEffect(() => {
@@ -68,11 +122,26 @@ export function CanvasViewport({
               clientWidth,
               clientHeight,
             );
+            if (activeLayout) {
+              setViewport((previous) => ({
+                ...previous,
+                x: previous.x - activeLayout.x * previous.zoom,
+                y: previous.y - activeLayout.y * previous.zoom,
+              }));
+            }
           }
+        },
+        goToPage: (pageId) => {
+          const target = layouts.find((layout) => layout.page.id === pageId);
+          if (target) setViewport((previous) => ({
+            ...previous,
+            y: 36 - target.y * previous.zoom,
+          }));
         },
       };
     }
-  }, [viewportControlsRef, zoomIn, zoomOut, resetZoom, centerPage, pageDimensions]);
+  }, [viewportControlsRef, zoomIn, zoomOut, resetZoom, centerPage, pageDimensions,
+    activeLayout?.x, activeLayout?.y, setViewport, pages]);
 
   // Report zoom changes
   useEffect(() => {
@@ -86,9 +155,9 @@ export function CanvasViewport({
     const fitWidth = () => {
       const { clientWidth, clientHeight } = container;
       if (clientWidth <= 0 || clientHeight <= 0) return;
-      const zoom = clamp((clientWidth - 72) / pageDimensions.width, MIN_ZOOM, 1);
+      const zoom = clamp((clientWidth - 72) / documentWidth, MIN_ZOOM, 1);
       setViewport({
-        x: (clientWidth - pageDimensions.width * zoom) / 2,
+        x: (clientWidth - documentWidth * zoom) / 2,
         y: 36,
         zoom,
       });
@@ -98,7 +167,7 @@ export function CanvasViewport({
     const observer = new ResizeObserver(fitWidth);
     observer.observe(container);
     return () => observer.disconnect();
-  }, [pageDimensions, setViewport]);
+  }, [documentWidth, setViewport]);
 
   // Panning state (Middle mouse or Space + Left click drag)
   const [isSpacePressed, setIsSpacePressed] = useState(false);
@@ -170,87 +239,39 @@ export function CanvasViewport({
     if (!container) return;
     const handleWheel = (event: WheelEvent) => {
       event.preventDefault();
+      const current = viewportRef.current;
       if (event.ctrlKey || event.metaKey) {
         const rect = container.getBoundingClientRect();
         const anchor = { x: event.clientX - rect.left, y: event.clientY - rect.top };
-        zoomTo(viewport.zoom * (event.deltaY < 0 ? 1.08 : 0.92), anchor);
+        zoomTo(current.zoom * (event.deltaY < 0 ? 1.08 : 0.92), anchor);
       } else {
-        panBy(-event.deltaX, -event.deltaY);
+        const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? container.clientHeight : 1;
+        const dx = event.deltaX * unit;
+        const dy = event.deltaY * unit;
+        const gesture = appendGestureRef.current;
+        const now = Date.now();
+        if (now - gesture.lastWheelAt > 350) gesture.requested = false;
+        gesture.lastWheelAt = now;
+        if (gesture.requested && dy > 0) return;
+        const next = { ...current, x: current.x - dx, y: current.y - dy };
+        viewportRef.current = next;
+        setViewport(next);
+        const restingBottom = Math.min(container.clientHeight - 36, 36 + documentHeight * next.zoom);
+        // Require 240 screen pixels of overscroll, and only append once per wheel gesture.
+        if (onAppendPage && lastPageId && container.clientHeight > 0 &&
+          dy > 0 && Math.abs(dy) > Math.abs(dx) && !gesture.requested &&
+          gesture.pageId !== lastPageId && next.y + documentHeight * next.zoom <= restingBottom - 240) {
+          gesture.requested = true;
+          gesture.pageId = lastPageId;
+          onAppendPage();
+        }
       }
     };
     container.addEventListener("wheel", handleWheel, { passive: false });
     return () => container.removeEventListener("wheel", handleWheel);
-  }, [viewport.zoom, panBy, zoomTo]);
+  }, [documentHeight, lastPageId, onAppendPage, setViewport, zoomTo]);
 
-  // Stroke input handling on the paper surface
-  const {
-    livePoints,
-    cursorPos,
-    handlePointerDown: onCanvasPointerDown,
-    handlePointerMove: onCanvasPointerMove,
-    handlePointerLeave: onCanvasPointerLeave,
-    handlePointerUp: onCanvasPointerUp,
-    handlePointerCancel: onCanvasPointerCancel,
-  } = useStrokeInput({
-    pageId: page.id,
-    viewport,
-    style: activeStyle,
-    activeTool,
-    onStrokeComplete,
-    onEraseStart,
-    onEraseAtPoint,
-    onEraseEnd,
-    isPanningActive: isSpacePressed || isPanning,
-  });
-
-  // Render loop to canvas
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    const dpr = window.devicePixelRatio || 1;
-    const targetWidth = Math.round(pageDimensions.width * dpr);
-    const targetHeight = Math.round(pageDimensions.height * dpr);
-
-    if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
-      canvas.width = targetWidth;
-      canvas.height = targetHeight;
-    }
-
-    ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    ctx.scale(dpr, dpr);
-
-    // 1. Draw paper background and ruled lines
-    renderPaperTemplate(ctx, {
-      template: page.template,
-      dimensions: pageDimensions,
-    });
-
-    // 2. Draw existing strokes
-    for (const stroke of strokes) {
-      renderStrokeObject(ctx, stroke);
-    }
-
-    // 3. Draw in-progress live stroke
-    if (livePoints.length > 0) {
-      let liveStrokeType: "pen-stroke" | "pencil-stroke" | "highlighter-stroke" =
-        "pen-stroke";
-      if (activeTool === "pencil") liveStrokeType = "pencil-stroke";
-      if (activeTool === "highlighter") liveStrokeType = "highlighter-stroke";
-
-      renderLiveStroke(ctx, livePoints, activeStyle, liveStrokeType);
-    }
-
-    ctx.restore();
-  }, [page.template, pageDimensions, strokes, livePoints, activeStyle, activeTool]);
-
-  const isEraser = activeTool === "eraser-partial" || activeTool === "eraser-stroke";
+  const isEraser = !objectTool && (activeTool === "eraser-partial" || activeTool === "eraser-stroke");
   const cursorClass = isPanning
     ? "cursor-grabbing"
     : isSpacePressed
@@ -269,48 +290,29 @@ export function CanvasViewport({
       onPointerCancel={handleContainerPointerUp}
       data-testid="canvas-workspace"
     >
-      {/* Transformed Page Sheet Container */}
       <div
-        className="paper-sheet-container"
+        className="paper-document"
         style={{
           transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})`,
           transformOrigin: "0 0",
-          width: pageDimensions.width,
-          height: pageDimensions.height,
+          width: documentWidth,
+          height: documentHeight,
         }}
-        data-testid="paper-sheet"
       >
-        {/* Base Canvas Layer */}
-        <canvas
-          ref={canvasRef}
-          className="paper-canvas"
-          style={{
-            width: pageDimensions.width,
-            height: pageDimensions.height,
-          }}
-          onPointerDown={onCanvasPointerDown}
-          onPointerMove={onCanvasPointerMove}
-          onPointerLeave={onCanvasPointerLeave}
-          onPointerUp={onCanvasPointerUp}
-          onPointerCancel={onCanvasPointerCancel}
-          onLostPointerCapture={onCanvasPointerCancel}
-          data-testid="drawing-canvas"
-        />
-
-        {/* Overlay DOM Layer */}
-        <div
-          className="paper-overlay-layer"
-          style={{
-            width: pageDimensions.width,
-            height: pageDimensions.height,
-          }}
-        >
-          <EraserCursor
-            activeTool={activeTool}
-            thickness={activeStyle.thickness}
-            cursorPos={cursorPos}
-          />
-        </div>
+        {layouts.map((layout) => (
+          <PageSurface key={layout.page.id} page={layout.page} offsetX={layout.x} offsetY={layout.y}
+            viewport={viewport} strokes={strokes.filter((stroke) => stroke.pageId === layout.page.id)}
+            objects={objects?.filter((object) => object.pageId === layout.page.id)}
+            onObjectsChange={onObjectsChange} objectTool={objectTool} shapeKind={shapeKind} shapeFilled={shapeFilled}
+            selectedIds={selectedIds} onSelectionChange={onSelectionChange}
+            onObjectGestureStart={onObjectGestureStart} onObjectGestureEnd={onObjectGestureEnd}
+            onStrokeComplete={onStrokeComplete} onEraseStart={onEraseStart}
+            onEraseAtPoint={onPageEraseAtPoint
+              ? (...args) => onPageEraseAtPoint(layout.page.id, ...args) : onEraseAtPoint}
+            onEraseEnd={onEraseEnd} onActivate={onPageActivate}
+            activeStyle={activeStyle} activeTool={activeTool}
+            isPanningActive={isSpacePressed || isPanning} />
+        ))}
       </div>
     </div>
   );
