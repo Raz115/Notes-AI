@@ -21,6 +21,7 @@ function renderToolbar(overrides: Partial<ToolbarProps> = {}) {
     canUndo: false,
     canRedo: false,
     backendStatus: "online",
+    localSaveStatus: "saved",
     ...overrides,
   };
   render(<Toolbar {...props} />);

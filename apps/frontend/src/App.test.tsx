@@ -1,10 +1,20 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App.js";
+import { getPendingSyncChanges, loadWorkspace, openLocalWorkspace } from "./persistence/localWorkspace.js";
 
-function openEditor() {
-  render(<App />);
+let testDatabaseName = "";
+
+async function renderDashboard() {
+  const view = render(<App databaseName={testDatabaseName} />);
+  await screen.findByRole("button", { name: "New notebook" });
+  return view;
+}
+
+async function openEditor() {
+  const view = await renderDashboard();
   fireEvent.click(screen.getByRole("button", { name: "Open Untitled notebook" }));
+  return view;
 }
 
 const point = (x: number, y: number) => ({ button: 0, pointerId: 1, clientX: x, clientY: y });
@@ -25,14 +35,15 @@ function lassoArea(layer: HTMLElement, x1: number, y1: number, x2: number, y2: n
 
 describe("App (Phase 2 Writing Tools)", () => {
   beforeEach(() => {
+    testDatabaseName = `notes-ai-test-${crypto.randomUUID()}`;
     vi.stubGlobal(
       "fetch",
       vi.fn(() => Promise.resolve({ ok: true } as Response)),
     );
   });
 
-  it("selects the labelled partial eraser first and then switches modes", () => {
-    openEditor();
+  it("selects the labelled partial eraser first and then switches modes", async () => {
+    await openEditor();
 
     fireEvent.click(screen.getByRole("button", { name: /Partial Eraser/i }));
     expect(screen.getByRole("button", { name: /Partial Eraser/i })).toHaveClass("active");
@@ -41,13 +52,13 @@ describe("App (Phase 2 Writing Tools)", () => {
   });
 
   it("renders the canvas workspace, toolbar with history buttons, tool controls, and zoom widget", async () => {
-    openEditor();
+    await openEditor();
 
     expect(screen.getByText(/Notes AI/i)).toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: "Untitled notebook" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Session only")).toBeInTheDocument();
+    await screen.findByText("Saved locally");
 
     expect(screen.getByTestId("app-toolbar")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Undo/i })).toBeInTheDocument();
@@ -74,8 +85,44 @@ describe("App (Phase 2 Writing Tools)", () => {
     );
   });
 
-  it("erases sparse strokes along pointer paths and undoes each gesture atomically", () => {
-    openEditor();
+  it("autosaves local changes and restores notebooks, pages, and objects after reload", async () => {
+    const view = await openEditor();
+    const layer = screen.getByTestId("object-layer");
+    fireEvent.click(screen.getByRole("button", { name: "Shape" }));
+    drawShape(layer, 100, 100, 180, 180);
+    fireEvent.click(screen.getByRole("button", { name: "Add page" }));
+    fireEvent.click(screen.getByRole("button", { name: "Back to notebooks" }));
+    fireEvent.click(screen.getByRole("button", { name: "New folder" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Name" }), { target: { value: "Study" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create" }));
+    fireEvent(window, new Event("pagehide"));
+    await screen.findByText(/Saved on this device/);
+
+    const database = await openLocalWorkspace(testDatabaseName);
+    try {
+      await waitFor(async () => {
+        const saved = await loadWorkspace(database);
+        expect(saved?.notebooks).toHaveLength(1);
+        expect(saved?.folders.map((item) => item.name)).toContain("Study");
+        expect(saved?.pages).toHaveLength(2);
+        expect(saved?.objects).toHaveLength(1);
+        expect((await getPendingSyncChanges(database)).some((change) => change.entityType === "object")).toBe(true);
+      });
+    } finally {
+      database.close();
+    }
+
+    view.unmount();
+    await renderDashboard();
+    fireEvent.click(screen.getByRole("button", { name: "Open Untitled notebook" }));
+    expect(screen.getByLabelText("Current page")).toHaveDisplayValue("Page 2");
+    const recoveredLayers = screen.getAllByTestId("object-layer");
+    expect(recoveredLayers[0]?.querySelector("rect[x='100']")).toBeInTheDocument();
+    await screen.findByText("Saved locally");
+  });
+
+  it("erases sparse strokes along pointer paths and undoes each gesture atomically", async () => {
+    await openEditor();
     const canvas = screen.getByTestId("drawing-canvas");
     const expectStrokeCount = (count: number) => {
       fireEvent.click(screen.getByRole("button", { name: "Notebook options" }));
@@ -119,8 +166,8 @@ describe("App (Phase 2 Writing Tools)", () => {
     expectStrokeCount(0);
   });
 
-  it("creates, selects, moves, copies and deletes editable shapes with undo", () => {
-    openEditor();
+  it("creates, selects, moves, copies and deletes editable shapes with undo", async () => {
+    await openEditor();
     const layer = screen.getByTestId("object-layer");
     const point = (x: number, y: number) => ({ button: 0, pointerId: 1, clientX: x, clientY: y });
     fireEvent.click(screen.getByRole("button", { name: "Shape" }));
@@ -159,8 +206,8 @@ describe("App (Phase 2 Writing Tools)", () => {
     expect(layer.querySelectorAll("rect[x='120']")).toHaveLength(1);
   });
 
-  it("creates directly editable text and restores text edits with undo", () => {
-    openEditor();
+  it("creates directly editable text and restores text edits with undo", async () => {
+    await openEditor();
     const layer = screen.getByTestId("object-layer");
     fireEvent.click(screen.getByRole("button", { name: "Text" }));
     fireEvent.pointerDown(layer, { button: 0, pointerId: 1, clientX: 100, clientY: 100 });
@@ -172,8 +219,8 @@ describe("App (Phase 2 Writing Tools)", () => {
     expect(text).toHaveValue("");
   });
 
-  it("does not add an undo step when a selection is dragged back to its starting point", () => {
-    openEditor();
+  it("does not add an undo step when a selection is dragged back to its starting point", async () => {
+    await openEditor();
     const layer = screen.getByTestId("object-layer");
     const point = (x: number, y: number) => ({ button: 0, pointerId: 1, clientX: x, clientY: y });
     fireEvent.click(screen.getByRole("button", { name: "Shape" }));
@@ -194,8 +241,8 @@ describe("App (Phase 2 Writing Tools)", () => {
     expect(layer.querySelector("rect[x='100']")).not.toBeInTheDocument();
   });
 
-  it("cleans up a selected stroke and restores the original with undo", () => {
-    openEditor();
+  it("cleans up a selected stroke and restores the original with undo", async () => {
+    await openEditor();
     const canvas = screen.getByTestId("drawing-canvas");
     const layer = screen.getByTestId("object-layer");
     const point = (x: number, y: number) => ({ button: 0, pointerId: 1, clientX: x, clientY: y });
@@ -213,8 +260,8 @@ describe("App (Phase 2 Writing Tools)", () => {
     expect(layer.querySelector("line")).not.toBeInTheDocument();
   });
 
-  it("keeps pages independent when adding, reordering and deleting", () => {
-    openEditor();
+  it("keeps pages independent when adding, reordering and deleting", async () => {
+    await openEditor();
     const point = (x: number, y: number) => ({ button: 0, pointerId: 1, clientX: x, clientY: y });
     const first = screen.getByTestId("drawing-canvas");
     fireEvent.pointerDown(first, point(100, 100));
@@ -237,8 +284,8 @@ describe("App (Phase 2 Writing Tools)", () => {
     expect(screen.getByText("1 stroke on this page")).toBeInTheDocument();
   });
 
-  it("pastes copied objects onto the active page without changing the source", () => {
-    openEditor();
+  it("pastes copied objects onto the active page without changing the source", async () => {
+    await openEditor();
     const layer = screen.getByTestId("object-layer");
     const point = (x: number, y: number) => ({ button: 0, pointerId: 1, clientX: x, clientY: y });
     fireEvent.click(screen.getByRole("button", { name: "Shape" }));
@@ -261,8 +308,8 @@ describe("App (Phase 2 Writing Tools)", () => {
     expect(layers[1]?.querySelector("rect[x='120']")).not.toBeInTheDocument();
   });
 
-  it("creates nested folders and duplicates a notebook with its pages and content", () => {
-    render(<App />);
+  it("creates nested folders and duplicates a notebook with its pages and content", async () => {
+    await renderDashboard();
     fireEvent.click(screen.getByRole("button", { name: "New folder" }));
     fireEvent.change(screen.getByRole("textbox", { name: "Name" }), { target: { value: "Studies" } });
     fireEvent.click(screen.getByRole("button", { name: "Create" }));
@@ -296,8 +343,8 @@ describe("App (Phase 2 Writing Tools)", () => {
     expect(screen.getByText("1 stroke on this page")).toBeInTheDocument();
   });
 
-  it("deletes nested folder contents only after confirmation", () => {
-    render(<App />);
+  it("deletes nested folder contents only after confirmation", async () => {
+    await renderDashboard();
     fireEvent.click(screen.getByRole("button", { name: "New folder" }));
     fireEvent.change(screen.getByRole("textbox", { name: "Name" }), { target: { value: "Archive" } });
     fireEvent.click(screen.getByRole("button", { name: "Create" }));
@@ -315,8 +362,8 @@ describe("App (Phase 2 Writing Tools)", () => {
     expect(screen.getByRole("button", { name: "Open Untitled notebook" })).toBeInTheDocument();
   });
 
-  it("deletes notebook page objects as well as its dashboard entry", () => {
-    render(<App />);
+  it("deletes notebook page objects as well as its dashboard entry", async () => {
+    await renderDashboard();
     fireEvent.click(screen.getByRole("button", { name: "Open Untitled notebook" }));
     fireEvent.click(screen.getByRole("button", { name: "Shape" }));
     const layer = screen.getByTestId("object-layer");
@@ -332,8 +379,8 @@ describe("App (Phase 2 Writing Tools)", () => {
     expect(screen.getByRole("button", { name: "New notebook" })).toBeInTheDocument();
   });
 
-  it("moves notebooks and folders by dragging and supports renaming", () => {
-    render(<App />);
+  it("moves notebooks and folders by dragging and supports renaming", async () => {
+    await renderDashboard();
     for (const name of ["Projects", "Inbox"]) {
       fireEvent.click(screen.getByRole("button", { name: "New folder" }));
       fireEvent.change(screen.getByRole("textbox", { name: "Name" }), { target: { value: name } });
@@ -361,8 +408,8 @@ describe("App (Phase 2 Writing Tools)", () => {
     expect(screen.getByRole("button", { name: "Open Plans" })).toBeInTheDocument();
   });
 
-  it("keeps new-notebook defaults when returning from the editor", () => {
-    render(<App />);
+  it("keeps new-notebook defaults when returning from the editor", async () => {
+    await renderDashboard();
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
     fireEvent.change(screen.getByLabelText("Paper size"), { target: { value: "letter" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
@@ -372,8 +419,8 @@ describe("App (Phase 2 Writing Tools)", () => {
     expect(screen.getByLabelText("Paper size")).toHaveValue("letter");
   });
 
-  it("keeps notebook actions behind the overflow button and dismisses it with Escape or an outside click", () => {
-    render(<App />);
+  it("keeps notebook actions behind the overflow button and dismisses it with Escape or an outside click", async () => {
+    await renderDashboard();
     const card = screen.getByRole("button", { name: "Open Untitled notebook" }).closest("article")!;
     const trigger = within(card).getByRole("button", { name: "Notebook actions for Untitled notebook" });
     expect(within(card).queryByRole("button", { name: "Rename" })).not.toBeInTheDocument();
@@ -394,8 +441,8 @@ describe("App (Phase 2 Writing Tools)", () => {
   it.each([
     ["legal", "portrait", 816, 1344],
     ["cue-card", "landscape", 576, 384],
-  ])("creates and extends %s paper with actual dimensions", (size, orientation, width, height) => {
-    render(<App />);
+  ])("creates and extends %s paper with actual dimensions", async (size, orientation, width, height) => {
+    await renderDashboard();
     fireEvent.click(screen.getByRole("button", { name: "New notebook" }));
     fireEvent.change(screen.getByRole("textbox", { name: "Name" }), { target: { value: "Paper test" } });
     fireEvent.change(screen.getByLabelText("Paper size"), { target: { value: size } });
@@ -408,11 +455,11 @@ describe("App (Phase 2 Writing Tools)", () => {
     }
   });
 
-  it("automatically appends using the last page's paper settings and activates the new page", () => {
+  it("automatically appends using the last page's paper settings and activates the new page", async () => {
     const width = vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(1000);
     const height = vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(800);
     try {
-      openEditor();
+      await openEditor();
       fireEvent.click(screen.getByRole("button", { name: "Add page" }));
       fireEvent.click(screen.getByRole("button", { name: "Page settings" }));
       fireEvent.click(screen.getByRole("button", { name: "Legal" }));
@@ -431,8 +478,8 @@ describe("App (Phase 2 Writing Tools)", () => {
     }
   });
 
-  it("places icon tools in the main ribbon and provides an accessible icon shape chooser", () => {
-    openEditor();
+  it("places icon tools in the main ribbon and provides an accessible icon shape chooser", async () => {
+    await openEditor();
     const ribbon = screen.getByRole("toolbar", { name: "Editing tools" });
     for (const name of ["Select", "Text", "Shape"]) {
       const button = within(ribbon).getByRole("button", { name });
@@ -462,8 +509,8 @@ describe("App (Phase 2 Writing Tools)", () => {
     ["Triangle", "polygon", true],
     ["Line", "g > line", false],
     ["Arrow", "g > polyline", false],
-  ])("creates %s with the appropriate fill and renders it in the notebook thumbnail", (name, selector, closed) => {
-    openEditor();
+  ])("creates %s with the appropriate fill and renders it in the notebook thumbnail", async (name, selector, closed) => {
+    await openEditor();
     fireEvent.click(screen.getByRole("button", { name: "Shape" }));
     const picker = screen.getByRole("dialog", { name: "Shapes" });
     fireEvent.click(within(picker).getByRole("button", { name: "Solid" }));
@@ -482,8 +529,8 @@ describe("App (Phase 2 Writing Tools)", () => {
     expect(closed ? preview : preview?.parentElement).toHaveAttribute("fill", closed ? "#000000" : "none");
   });
 
-  it("changes a selected shape's size, opacity and fill with atomic undo and redo", () => {
-    openEditor();
+  it("changes a selected shape's size, opacity and fill with atomic undo and redo", async () => {
+    await openEditor();
     fireEvent.click(screen.getByRole("button", { name: "Shape" }));
     const layer = screen.getByTestId("object-layer");
     drawShape(layer, 100, 100, 200, 200);
@@ -539,8 +586,8 @@ describe("App (Phase 2 Writing Tools)", () => {
     expect(rectangle).toHaveAttribute("fill", "#ff0000");
   });
 
-  it("formats only selected shapes in a mixed selection and reports mixed settings", () => {
-    openEditor();
+  it("formats only selected shapes in a mixed selection and reports mixed settings", async () => {
+    await openEditor();
     fireEvent.click(screen.getByRole("button", { name: "Shape" }));
     const layer = screen.getByTestId("object-layer");
     drawShape(layer, 100, 100, 170, 170);
@@ -592,8 +639,8 @@ describe("App (Phase 2 Writing Tools)", () => {
     expect(text).toHaveStyle({ color: "#000000", fontSize: "18px" });
   });
 
-  it("commits an in-progress slider gesture when its panel is dismissed", () => {
-    openEditor();
+  it("commits an in-progress slider gesture when its panel is dismissed", async () => {
+    await openEditor();
     fireEvent.click(screen.getByRole("button", { name: "Shape" }));
     const layer = screen.getByTestId("object-layer");
     drawShape(layer, 100, 100, 200, 200);
@@ -610,8 +657,8 @@ describe("App (Phase 2 Writing Tools)", () => {
     expect(layer.querySelector("rect[x='100']")).toHaveAttribute("opacity", "1");
   });
 
-  it("uses the last ink style for shapes after switching from the eraser", () => {
-    openEditor();
+  it("uses the last ink style for shapes after switching from the eraser", async () => {
+    await openEditor();
     fireEvent.click(screen.getByRole("button", { name: "Ink color" }));
     fireEvent.change(screen.getByLabelText("Custom color"), { target: { value: "#ff0000" } });
     fireEvent.click(screen.getByRole("button", { name: "Close settings" }));

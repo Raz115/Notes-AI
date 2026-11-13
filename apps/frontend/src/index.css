@@ -515,6 +515,36 @@ button {
   border-radius: 50%;
 }
 
+.local-save-status.saved > span {
+  background: #4b8c67;
+}
+
+.local-save-status.error {
+  color: #a63d40;
+}
+
+.local-save-status.error > span {
+  background: #c94f52;
+}
+
+.local-workspace-loading {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  background: #f0f1f4;
+}
+
+.local-save-error {
+  margin: 8px 16px;
+  padding: 10px 12px;
+  border: 1px solid #e8b6b6;
+  border-radius: 8px;
+  color: #8f292b;
+  background: #fff5f5;
+  font-size: 13px;
+}
+
 .icon-button,
 .quiet-button,
 .tool-btn,

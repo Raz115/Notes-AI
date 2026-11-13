@@ -8,6 +8,7 @@ import type {
   ToolSettings,
 } from "@ai-notes/shared";
 import { Icon, type IconName } from "./Icon.js";
+import type { LocalSaveStatus } from "../persistence/localWorkspace.js";
 
 export interface ToolbarProps {
   activeTool: ActiveToolType;
@@ -33,6 +34,7 @@ export interface ToolbarProps {
   canUndo: boolean;
   canRedo: boolean;
   backendStatus: "checking" | "online" | "offline";
+  localSaveStatus: LocalSaveStatus;
 }
 
 const PRESET_COLORS = [
@@ -108,6 +110,7 @@ export function Toolbar({
   canUndo,
   canRedo,
   backendStatus,
+  localSaveStatus,
 }: ToolbarProps) {
   const isEraser = activeTool === "eraser-partial" || activeTool === "eraser-stroke";
   const [panel, setPanel] = useState<{
@@ -215,10 +218,17 @@ export function Toolbar({
         </div>
         <div className="document-actions">
           <span
-            className="session-status"
-            title="This page is not saved. Notes are kept only for the current session."
+            className={`session-status local-save-status ${localSaveStatus}`}
+            title={localSaveStatus === "error"
+              ? "Local save failed. Your current edits are still in memory."
+              : localSaveStatus === "saving"
+                ? "Saving changes to this device."
+                : "Saved on this device. Cloud sync is not connected yet."}
+            role={localSaveStatus === "error" ? "alert" : "status"}
+            aria-live="polite"
           >
-            <span /> Session only
+            <span /> {localSaveStatus === "saving" ? "Saving…" :
+              localSaveStatus === "error" ? "Save failed" : "Saved locally"}
           </span>
           <button
             type="button"
@@ -599,8 +609,8 @@ export function Toolbar({
           {panel.kind === "more" && (
             <>
               <p className="session-notice">
-                This is a temporary workspace. Notes are kept for this session only;
-                saving is not connected yet.
+                Your notebooks are saved in this browser for offline use. Cloud sync
+                is not connected yet, so this data is available only on this device.
               </p>
               <div className="notebook-details">
                 <span>

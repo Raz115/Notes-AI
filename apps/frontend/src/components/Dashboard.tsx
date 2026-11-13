@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type DragEvent, type FormEvent } from "rea
 import { PAGE_SIZE_OPTIONS, type CanvasObject, type Folder, type Notebook, type Page, type PageOrientation, type PageSize, type PageTemplate } from "@ai-notes/shared";
 import { PageThumbnail } from "./PageThumbnail.js";
 import { Icon } from "./Icon.js";
+import type { LocalSaveStatus } from "../persistence/localWorkspace.js";
 
 export interface NotebookOptions {
   name: string;
@@ -19,6 +20,8 @@ interface DashboardProps {
   folderId: string | null;
   onFolderChange: (id: string | null) => void;
   defaults: Pick<NotebookOptions, "size" | "orientation" | "template">;
+  localSaveStatus: LocalSaveStatus;
+  localSaveError: string | null;
   onDefaultsChange: (defaults: Pick<NotebookOptions, "size" | "orientation" | "template">) => void;
   onOpen: (id: string) => void;
   onCreateNotebook: (options: NotebookOptions) => void;
@@ -178,7 +181,10 @@ export function Dashboard(props: DashboardProps) {
       <header className="dashboard-header">
         <div><span className="app-name">NOTES AI</span><h1>Your notebooks</h1></div>
         <div className="dashboard-header-actions">
-          <span className="dashboard-session">Session only · sync unavailable</span>
+          <span className="dashboard-session" role={props.localSaveStatus === "error" ? "alert" : "status"}>
+            {props.localSaveStatus === "saving" ? "Saving locally…" :
+              props.localSaveStatus === "error" ? "Local save failed" : "Saved on this device · sync unavailable"}
+          </span>
           <button type="button" className="quiet-button" onClick={() => openDialog({ kind: "settings" })}>Settings</button>
         </div>
       </header>
@@ -195,6 +201,9 @@ export function Dashboard(props: DashboardProps) {
           <button type="button" className="quiet-button" aria-label="New folder"
             onClick={() => openDialog({ kind: "new-folder" })}>+ New folder</button>
         </div>
+        {props.localSaveError && <p role="alert" className="local-save-error">
+          Local storage error: {props.localSaveError} Changes remain available in memory but are not saved.
+        </p>}
         {error && !dialog && <p role="status">{error}</p>}
         <div className="dashboard-folders">
           {currentFolders.map((folder) => (
@@ -286,7 +295,7 @@ export function Dashboard(props: DashboardProps) {
               : "This deletes the notebook and all its pages."} This cannot be undone.</p> : dialog.kind !== "settings" ? (
               <label>Name <input autoFocus aria-label="Name" value={name} required
                 onChange={(event) => setName(event.target.value)} /></label>
-            ) : <p>These defaults apply to new notebooks in this session. Cloud sync is not connected.</p>}
+            ) : <p>These defaults are saved on this device. Cloud sync is not connected.</p>}
             {error && <p role="alert">{error}</p>}
             {(dialog.kind === "new-notebook" || dialog.kind === "settings") && (
               <div className="dashboard-form-fields">

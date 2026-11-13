@@ -145,8 +145,23 @@ Shared paper sizes cover A4, Letter, Legal, and 4 x 6 inch cue cards.
 Object history is scoped by notebook; deleting a page or notebook removes its
 objects from current state and history.
 
-All notebook, folder, page and object state remains in memory until Phase 5.
-Reloading loses the session; local persistence and recovery are not yet available.
+## Local persistence (Phase 5)
+
+IndexedDB is the source of truth for the local workspace. Separate object stores
+hold notebooks, folders, pages, individual canvas objects, workspace metadata,
+and pending sync changes. Canvas objects are keyed by ID and indexed by page ID
+and dirty status; each record carries its page ID and dirty flag. Autosave
+debounces edits and writes only added, changed, or deleted records in an atomic
+transaction rather than serializing all page content. A page-hide or app
+unmount flushes a pending save.
+
+Startup waits for IndexedDB recovery before showing the dashboard. The most
+recent notebook/page, notebook defaults, and writing-tool settings are restored
+with the content. Browser storage failures are reported in the UI while the
+editor remains usable in memory. Upserts and deletion tombstones are coalesced
+in a local sync queue for the later cloud phase; no server synchronization or
+cross-device backup is implemented yet. Clearing browser storage removes this
+local workspace.
 
 ## Tooling decisions
 

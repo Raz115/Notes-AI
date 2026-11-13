@@ -29,8 +29,35 @@ import {
 } from "./canvas/objectGeometry.js";
 import { recognizeShape } from "./canvas/recognizeShape.js";
 import { canMoveFolder, Dashboard, type NotebookOptions } from "./components/Dashboard.js";
+import {
+  loadWorkspace,
+  openLocalWorkspace,
+  saveWorkspaceChanges,
+  type LocalSaveStatus,
+  type WorkspaceSnapshot,
+} from "./persistence/localWorkspace.js";
 
 type BackendStatus = "checking" | "online" | "offline";
+type AppProps = { databaseName?: string };
+
+function workspaceHasChanges(previous: WorkspaceSnapshot | null, next: WorkspaceSnapshot): boolean {
+  if (!previous ||
+    previous.activeNotebookId !== next.activeNotebookId ||
+    previous.activePageId !== next.activePageId ||
+    previous.dashboardFolderId !== next.dashboardFolderId ||
+    previous.notebookDefaults !== next.notebookDefaults ||
+    previous.toolSettings !== next.toolSettings) return true;
+
+  const changed = <T extends { id: string }>(before: T[], after: T[]) => {
+    if (before.length !== after.length) return true;
+    const beforeById = new Map(before.map((item) => [item.id, item]));
+    return after.some((item) => beforeById.get(item.id) !== item);
+  };
+  return changed(previous.notebooks, next.notebooks) ||
+    changed(previous.folders, next.folders) ||
+    changed(previous.pages, next.pages) ||
+    changed(previous.objects, next.objects);
+}
 
 const DEFAULT_TOOL_SETTINGS: ToolSettingsMap = {
   pen: { color: "#000000", thickness: 4, opacity: 1.0 },
@@ -40,8 +67,17 @@ const DEFAULT_TOOL_SETTINGS: ToolSettingsMap = {
   "eraser-stroke": { color: "#ffffff", thickness: 20, opacity: 1.0 },
 };
 
-export function App() {
+export function App({ databaseName }: AppProps = {}) {
   const [backendStatus, setBackendStatus] = useState<BackendStatus>("checking");
+  const [isHydrated, setIsHydrated] = useState(false);
+  const [localSaveStatus, setLocalSaveStatus] = useState<LocalSaveStatus>("saving");
+  const [localSaveError, setLocalSaveError] = useState<string | null>(null);
+  const databaseRef = useRef<IDBDatabase | null>(null);
+  const lastSavedWorkspace = useRef<WorkspaceSnapshot | null>(null);
+  const saveQueue = useRef<Promise<void>>(Promise.resolve());
+  const saveRevision = useRef(0);
+  const flushPendingSave = useRef<() => void>(() => {});
+  const pendingSaveTimer = useRef<number | null>(null);
 
   // Health check polling on startup
   useEffect(() => {
@@ -109,6 +145,8 @@ export function App() {
     canUndo,
     canRedo,
   } = useHistory<CanvasObject>([], activeNotebookId, belongsToNotebook);
+  const setStrokesRef = useRef(setStrokes);
+  setStrokesRef.current = setStrokes;
 
   const [objectTool, setObjectTool] = useState<ObjectTool | null>(null);
   const [shapeKind, setShapeKind] = useState<ShapeKind>("rectangle");
@@ -139,6 +177,117 @@ export function App() {
     },
     [activeTool],
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    let openedDatabase: IDBDatabase | null = null;
+    openLocalWorkspace(databaseName).then(async (database) => {
+      openedDatabase = database;
+      const saved = await loadWorkspace(database);
+      if (cancelled) {
+        database.close();
+        return;
+      }
+      databaseRef.current = database;
+      if (saved) {
+        const activeNotebook = saved.notebooks.find((notebook) => notebook.id === saved.activeNotebookId)
+          ?? saved.notebooks[0];
+        const activePage = saved.pages.find((item) =>
+          item.id === saved.activePageId && item.notebookId === activeNotebook?.id)
+          ?? saved.pages.filter((item) => item.notebookId === activeNotebook?.id)
+            .sort((a, b) => a.order - b.order)[0];
+        setNotebooks(saved.notebooks);
+        setFolders(saved.folders);
+        setPages(saved.pages);
+        setStrokesRef.current(saved.objects, false);
+        if (activeNotebook) setActiveNotebookId(activeNotebook.id);
+        if (activePage) setActivePageId(activePage.id);
+        setDashboardFolderId(saved.dashboardFolderId);
+        setNotebookDefaults(saved.notebookDefaults);
+        setToolSettings(saved.toolSettings);
+      }
+      lastSavedWorkspace.current = saved;
+      setLocalSaveStatus(saved ? "saved" : "saving");
+      setIsHydrated(true);
+    }).catch((error: unknown) => {
+      openedDatabase?.close();
+      if (cancelled) return;
+      setLocalSaveError(error instanceof Error ? error.message : "Could not open local notebook storage.");
+      setLocalSaveStatus("error");
+      setIsHydrated(true);
+    });
+
+    return () => {
+      cancelled = true;
+      const database = databaseRef.current;
+      databaseRef.current = null;
+      if (database) {
+        flushPendingSave.current();
+        void saveQueue.current.finally(() => database.close());
+      } else {
+        openedDatabase?.close();
+      }
+    };
+  }, [databaseName]);
+
+  const workspaceSnapshot: WorkspaceSnapshot = {
+    notebooks,
+    folders,
+    pages,
+    objects,
+    activeNotebookId,
+    activePageId,
+    dashboardFolderId,
+    notebookDefaults,
+    toolSettings,
+  };
+  useEffect(() => {
+    const flush = () => {
+      if (pendingSaveTimer.current !== null) window.clearTimeout(pendingSaveTimer.current);
+      pendingSaveTimer.current = null;
+      flushPendingSave.current();
+    };
+    window.addEventListener("pagehide", flush);
+    return () => {
+      window.removeEventListener("pagehide", flush);
+      flush();
+    };
+  }, []);
+
+  useEffect(() => {
+    const database = databaseRef.current;
+    if (!isHydrated || !database || !workspaceHasChanges(lastSavedWorkspace.current, workspaceSnapshot)) return;
+    const revision = ++saveRevision.current;
+    setLocalSaveStatus("saving");
+    flushPendingSave.current = () => {
+      saveQueue.current = saveQueue.current.then(async () => {
+        if (!workspaceHasChanges(lastSavedWorkspace.current, workspaceSnapshot)) return;
+        await saveWorkspaceChanges(database, lastSavedWorkspace.current, workspaceSnapshot);
+        lastSavedWorkspace.current = workspaceSnapshot;
+        if (revision === saveRevision.current) {
+          setLocalSaveError(null);
+          setLocalSaveStatus("saved");
+        }
+      }).catch((error: unknown) => {
+        if (revision === saveRevision.current) {
+          setLocalSaveError(error instanceof Error ? error.message : "Could not save your notebook locally.");
+          setLocalSaveStatus("error");
+        }
+      });
+    };
+    const timeout = window.setTimeout(() => {
+      if (pendingSaveTimer.current === timeout) pendingSaveTimer.current = null;
+      flushPendingSave.current();
+    }, 300);
+    pendingSaveTimer.current = timeout;
+    return () => {
+      window.clearTimeout(timeout);
+      if (pendingSaveTimer.current === timeout) pendingSaveTimer.current = null;
+    };
+  }, [
+    isHydrated, notebooks, folders, pages, objects, activeNotebookId, activePageId,
+    dashboardFolderId, notebookDefaults, toolSettings,
+  ]);
 
   // Viewport zoom state for the zoom widget
   const [currentZoom, setCurrentZoom] = useState(1.0);
@@ -365,7 +514,8 @@ export function App() {
   };
 
   const openNotebook = (id: string) => {
-    const first = pages.filter((item) => item.notebookId === id).sort((a, b) => a.order - b.order)[0];
+    const notebookPages = pages.filter((item) => item.notebookId === id).sort((a, b) => a.order - b.order);
+    const first = notebookPages.find((item) => item.id === activePageId) ?? notebookPages[0];
     if (!first) return;
     setActiveNotebookId(id);
     setActivePageId(first.id);
@@ -445,10 +595,15 @@ export function App() {
     if (dashboardFolderId && descendants.has(dashboardFolderId)) setDashboardFolderId(null);
   };
 
+  if (!isHydrated) {
+    return <main className="local-workspace-loading" role="status">Opening your local notebooks…</main>;
+  }
+
   if (showDashboard) {
     return <Dashboard notebooks={notebooks} folders={folders} pages={pages} objects={objects}
       folderId={dashboardFolderId} onFolderChange={setDashboardFolderId}
       defaults={notebookDefaults} onDefaultsChange={setNotebookDefaults}
+      localSaveStatus={localSaveStatus} localSaveError={localSaveError}
       onOpen={openNotebook} onCreateNotebook={createNotebook}
       onCreateFolder={(name, parentFolderId) => {
         const now = new Date().toISOString();
@@ -473,6 +628,9 @@ export function App() {
 
   return (
     <div className="app-container">
+      {localSaveError && <p className="local-save-error" role="alert">
+        Local storage error: {localSaveError} Changes remain available in memory but are not saved.
+      </p>}
       <Toolbar
         notebookName={notebooks.find((notebook) => notebook.id === activeNotebookId)?.name}
         onHome={() => { setSelectedIds([]); setShowDashboard(true); }}
@@ -501,6 +659,7 @@ export function App() {
         canUndo={canUndo}
         canRedo={canRedo}
         backendStatus={backendStatus}
+        localSaveStatus={localSaveStatus}
         objectTools={<ObjectToolbar
           tool={objectTool}
           onSelectTool={(tool) => {

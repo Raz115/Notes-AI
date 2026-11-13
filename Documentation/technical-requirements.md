@@ -1180,6 +1180,12 @@ Local persistence shall support:
 
 The canvas should not wait for a network request before considering a local edit saved.
 
+The local database shall use versioned stores for notebooks, folders, pages,
+canvas objects, workspace metadata, and pending sync changes. Writes shall be
+transactional and update only changed records; deletions shall leave sync
+tombstones until acknowledged. A storage failure shall be surfaced to the user
+without disabling in-memory editing or claiming that changes were saved.
+
 ---
 
 # 54. Cloud Persistence
@@ -1582,7 +1588,10 @@ Implement:
 - Serialization/deserialization
 - Local sync queue
 
-**Exit criteria:** browser refresh/offline editing does not lose local work.
+**Exit criteria:** browser refresh/offline editing does not lose acknowledged
+local work; local storage failures are visible and do not block editing. The
+sync queue records dirty upserts and deletion tombstones but is not connected
+to cloud until Phase 6.
 
 ---
 
